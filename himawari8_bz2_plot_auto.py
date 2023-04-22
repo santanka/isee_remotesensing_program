@@ -2,10 +2,12 @@ import urllib.request
 import os
 import bz2
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import tarfile
 import datetime
 from multiprocessing import Pool
+import time
 
 #以下で扱うデータの情報は千葉大学環境リモートセンシング研究センターのサイトを参照
 # http://www.cr.chiba-u.jp/databases/GEO/H8_9/FD/index_jp_V20190123.html
@@ -35,7 +37,7 @@ width_plot_2_lon = 2E0
 width_plot_2_lat = 2E0
 
 #開始日時(1日~31日まで回す)
-start_month = 8
+start_month = 6
 end_month = 9
 
 #日時の指定
@@ -82,8 +84,22 @@ def url_name(yyyy, mm, fname):
 
 #ファイルのダウンロード、解凍、データ取得、ファイル削除
 def file_data_get(url, fname, band):
-    filename_url = os.path.basename(url)
-    urllib.request.urlretrieve(url, filename_url)
+    if (check_file_exists(fname) == False):
+        filename_url = os.path.basename(url)
+        while True:
+            try:
+                urllib.request.urlretrieve(url, filename_url)
+                break
+            except urllib.error.URLError as e:
+                if isinstance(e.reason, str):
+                # FTPのエラーであり、550エラーの場合は再試行しない
+                    if '550' in str(e.reason):
+                        print('File not found. Retry aborted.')
+                        return np.zeros(10)
+                print(f"Connection failed: {e}")
+                now = str(datetime.datetime.now())
+                print(f'{now}     Retrying in 60 seconds...')
+                time.sleep(60)
     _, tbb = np.loadtxt(f"count2tbb_v103/tir.{band}", unpack=True)
     with bz2.BZ2File(fname) as bz2file:
         dataDN = np.frombuffer(bz2file.read(), dtype=">u2").reshape(pixel_number, line_number)
@@ -94,15 +110,21 @@ def file_data_get(url, fname, band):
 #Ash RGB データ作成(inverse=1で反転、0で反転しない)
 def AshRGB_data(data, min_K, max_K, gamma, inverse):
     if(inverse == 0):
+        #print(r'not inverse')
         data_RGB = (max_K - data) / (max_K - min_K)
     elif(inverse == 1):
+        #print(r'inverse')
         data_RGB = (data - min_K) / (max_K - min_K)
     else:
         print(r'error!: inverse value')
         quit()
+    #print(r'check 1')
     data_RGB[data_RGB < 0] = 0E0
+    #print(r'check 2')
     data_RGB[data_RGB > 1] = 1E0
+    #print(r'check 3')
     data_RGB = data_RGB**gamma
+    #print(r'check 4')
     return data_RGB
 
 #plotする範囲
@@ -113,16 +135,31 @@ def plot_width(width_lon, width_lat):
     lat_set_max = nishinoshima_lat + width_lat
     return lon_set_min, lon_set_max, lat_set_min, lat_set_max
 
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Computer Modern Roman']
+mpl.rcParams['mathtext.fontset'] = 'cm'
+plt.rcParams["font.size"] = 25
+
 
 #放射輝度への変換テーブルのダウンロード
 cfname = "count2tbb_v103.tgz"
-url_cfname = f"ftp://hmwr829gr.cr.chiba-u.ac.jp/gridded/FD/support/{cfname}"
-filename_url_cfname = os.path.basename(url_cfname)
-urllib.request.urlretrieve(url_cfname, filename_url_cfname)
+if (check_file_exists(cfname) == False):
+    url_cfname = f"ftp://hmwr829gr.cr.chiba-u.ac.jp/gridded/FD/support/{cfname}"
+    filename_url_cfname = os.path.basename(url_cfname)
+    while True:
+        try:
+            urllib.request.urlretrieve(url_cfname, filename_url_cfname)
+            break
+        except urllib.error.URLError as e:
+            print(f"Connection failed: {e}")
+            now = str(datetime.datetime.now())
+            print(f'{now}     Retrying in 60 seconds...')
+            time.sleep(60)
+    # tarファイルを解凍する
+    with tarfile.open(filename_url_cfname, 'r:gz') as tar:
+        tar.extractall()
 
-# tarファイルを解凍する
-with tarfile.open(filename_url_cfname, 'r:gz') as tar:
-    tar.extractall()
 
 #ループ
 def main_loop_function(args):
@@ -132,7 +169,7 @@ def main_loop_function(args):
     if (time_check(month_int, day_int) == False):
         return
     
-    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png') == True):
+    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png') == True):
         return
     
     now = str(datetime.datetime.now())
@@ -152,6 +189,8 @@ def main_loop_function(args):
     data_tbb_13 = file_data_get(url_13, fname_13, band_13)
     data_tbb_14 = file_data_get(url_14, fname_14, band_14)
     data_tbb_15 = file_data_get(url_15, fname_15, band_15)
+    if (data_tbb_11.all() == 0 or data_tbb_13.all() == 0 or data_tbb_14.all() == 0 or data_tbb_15.all() == 0):
+        return
 
     now = str(datetime.datetime.now())
     print(f'{now}     Downloading is finished.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
@@ -159,25 +198,28 @@ def main_loop_function(args):
     data_diff_tbb_11_14 = np.float32(data_tbb_11 - data_tbb_14)
     data_diff_tbb_13_15 = np.float32(data_tbb_13 - data_tbb_15)
 
-    #now = str(datetime.datetime.now())
-    #print(f'{now}     Now Making Ash RGB data: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    now = str(datetime.datetime.now())
+    print(f'{now}     Now Making Ash RGB data: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
     #Himawari Ash RGBクイックガイドを参照 (https://www.data.jma.go.jp/mscweb/ja/prod/pdf/RGB_QG_Ash_jp.pdf)
     data_red    = AshRGB_data(data_diff_tbb_13_15,  -3.0E0,   7.5E0,  1.0E0, 0)
     data_green  = AshRGB_data(data_diff_tbb_11_14,  -5.9E0,   5.1E0, 8.5E-1, 0)
     data_blue   = AshRGB_data(        data_tbb_13, 243.6E0, 303.2E0,  1.0E0, 1)
 
-    #now = str(datetime.datetime.now())
-    #print(f'{now}     Now Making Ash RGB data (stack): {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    now = str(datetime.datetime.now())
+    print(f'{now}     Now Making Ash RGB data (stack): {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
-    data_rgb = np.dstack((data_red, data_green, data_blue))
+    try:
+        data_rgb = np.dstack((data_red, data_green, data_blue))
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
     #作図
     now = str(datetime.datetime.now())
     print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
     #fig = plt.figure(figsize=(12, 6), dpi=200)
-    fig = plt.figure(figsize=(6, 6), dpi=100)
+    fig = plt.figure(figsize=(15, 15), dpi=200)
 
     #ax1 = fig.add_subplot(121, title=f'{yyyy}/{mm}/{dd} {hh}:{mn} (UTC)', xlabel=r'longitude', ylabel=r'latitude')
     #ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
@@ -187,10 +229,19 @@ def main_loop_function(args):
     #ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
 
     ax1 = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd} {hh}:{mn} (UTC)', xlabel=r'longitude', ylabel=r'latitude')
-    ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
+    #print([lon_min, lon_max, lat_min, lat_max])
+    #print(data_rgb)
+    try:
+        ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    #print('error2')
     ax1.set_xlim(plot_width(width_plot_2_lon, width_plot_2_lat)[0], plot_width(width_plot_2_lon, width_plot_2_lat)[1])
+    #print('error3')
     ax1.set_ylim(plot_width(width_plot_2_lon, width_plot_2_lat)[2], plot_width(width_plot_2_lon, width_plot_2_lat)[3])
+    #print('error4')
     ax1.grid(which='both', axis='both', lw='0.5', alpha=0.5)
+    #print('error5')
     ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
 
     #拡大図
@@ -203,14 +254,16 @@ def main_loop_function(args):
 
     #ディレクトリの生成 (ディレクトリは要指定)
     try:
-        os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB/{yyyy}{mm}')
+        os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}')
     except FileExistsError:
         pass
     
     #画像の保存 (保存先は要指定)
-    fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png')
+    fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png')
     now = str(datetime.datetime.now())
     print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    plt.close()
+
     return
 
 #for month_int in range(start_month, end_month+1):
@@ -233,17 +286,21 @@ def main_loop_function(args):
 #                  for hour_int in range(0, 24)],
 #                  chunksize=1)
         
-if __name__ == '__main__':
-    
-    #プロセス数
-    num_processes = 1
+if (__name__ == '__main__'):
+    # プロセス数
+    num_processes = 1   #1推奨(要するに並列処理不可: ftp最大接続数10の制限の為)
 
-    #並列処理の指定
+    # 非同期処理の指定
     with Pool(processes=num_processes) as pool:
-        pool.map(main_loop_function, 
-                 [(month_int, day_int, 12) 
-                  for month_int in range(start_month, end_month+1)
-                  for day_int in range(1, 32)],
-                  chunksize=1)
-        
-print('finish')
+        results = []
+        for month_int in range(start_month, end_month+1):
+            for day_int in range(1, 32):
+                for hour_int in range(24):
+                    result = pool.apply_async(main_loop_function, [(month_int, day_int, hour_int)])
+                    results.append(result)
+        # 全ての非同期処理の終了を待機
+        for result in results:
+            result.get()
+    
+    print('finish')
+    quit()

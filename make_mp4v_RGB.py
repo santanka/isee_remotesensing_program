@@ -3,7 +3,6 @@ import os
 import datetime
 
 year = 2020
-pressure_level      = ['1000', '975', '950', '925', '900', '875', '850', '825', '800', '775', '750', '700', '650', '600', '550', '500', '450', '400', '350']
 
 #ファイルの確認
 def check_file_exists(filename):
@@ -17,10 +16,9 @@ for month in range (6, 10):
     for pressure_idx in range(19):
         yyyy = str(year).zfill(4)    #year
         mm      = str(month).zfill(2)   #month
-        pressure = pressure_level[pressure_idx]
 
         # 画像が含まれるフォルダのパス
-        folder_path = f'/mnt/j/isee_remote_data/reanalysis-era5-pressure-levels/wind/pressure_{pressure}/{yyyy}{mm}/'
+        folder_path = f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}/'
 
         # 動画ファイルの設定
         video_filename = f'{folder_path}{yyyy}{mm}.mp4'

@@ -11,8 +11,8 @@ import numpy as np
 #以下で扱うデータはJAXAひまわりモニタから引用
 #https://www.eorc.jaxa.jp/ptree/userguide_j.html
 ftp_site        = 'ftp.ptree.jaxa.jp'                   # FTPサイトのURL
-ftp_user        = 'koseki.saito_stpp.gp.tohoku.ac.jp'   # FTP接続に使用するユーザー名
-ftp_password    = 'SP+wari8'                            # FTP接続に使用するパスワード
+ftp_user        = 'XXXX'   # FTP接続に使用するユーザー名
+ftp_password    = 'YYYY'                            # FTP接続に使用するパスワード
 
 #1km日本域のデータを使用(24N-50N, 123E-150Eの矩形領域)
 pixel_number    = 2701
