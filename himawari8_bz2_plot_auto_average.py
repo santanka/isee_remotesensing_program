@@ -95,17 +95,21 @@ def file_data_get(url, fname, band):
                 if isinstance(e.reason, str):
                 # FTPのエラーであり、550エラーの場合は再試行しない
                     if '550' in str(e.reason):
-                        print('File not found. Retry aborted.')
                         time.sleep(5)
+                        print('File not found. Retry aborted.')
                         return np.zeros(10)
                 print(f"Connection failed: {e}")
                 now = str(datetime.datetime.now())
                 print(f'{now}     Retrying in 60 seconds...')
                 time.sleep(60)
     _, tbb = np.loadtxt(f"count2tbb_v103/tir.{band}", unpack=True)
-    with bz2.BZ2File(fname) as bz2file:
-        dataDN = np.frombuffer(bz2file.read(), dtype=">u2").reshape(pixel_number, line_number)
-        data = np.float32(tbb[dataDN])
+    try:
+        with bz2.BZ2File(fname) as bz2file:
+            dataDN = np.frombuffer(bz2file.read(), dtype=">u2").reshape(pixel_number, line_number)
+            data = np.float32(tbb[dataDN])
+    except EOFError:
+        print(f"Error: Compressed file ended before the end-of-stream marker was reached")
+        return np.zeros(10)
     os.remove(fname)
     return data
 
@@ -165,144 +169,121 @@ if (check_file_exists(cfname) == False):
 
 #ループ
 def main_loop_function(args):
-    month_int, day_int, hour_int = args
-    yyyy, mm, dd, hh, mn = time_and_date(month_int, day_int, hour_int)
+    month_int, day_int = args
+    yyyy, mm, dd, hh, mn = time_and_date(month_int, day_int, 0)
 
     if (time_check(month_int, day_int) == False):
         return
     
-    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png') == True):
+    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
         return
     
-    now = str(datetime.datetime.now())
-    print(f'{now}     Now Downloading: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    data_red_save = np.zeros((6000, 6000))
+    data_green_save = np.zeros((6000, 6000))
+    data_blue_save = np.zeros((6000, 6000))
+    error_count = 0
+    
+    for hour_int in range(24):
+        yyyy, mm, dd, hh, mn = time_and_date(month_int, day_int, hour_int)
+        now = str(datetime.datetime.now())
+        print(f'{now}     Now Downloading: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
-    fname_11 = bz2_filename(yyyy, mm, dd, hh, mn, band_11)
-    fname_13 = bz2_filename(yyyy, mm, dd, hh, mn, band_13)
-    fname_14 = bz2_filename(yyyy, mm, dd, hh, mn, band_14)
-    fname_15 = bz2_filename(yyyy, mm, dd, hh, mn, band_15)
+        fname_11 = bz2_filename(yyyy, mm, dd, hh, mn, band_11)
+        fname_13 = bz2_filename(yyyy, mm, dd, hh, mn, band_13)
+        fname_14 = bz2_filename(yyyy, mm, dd, hh, mn, band_14)
+        fname_15 = bz2_filename(yyyy, mm, dd, hh, mn, band_15)
 
-    url_11 = url_name(yyyy, mm, fname_11)
-    url_13 = url_name(yyyy, mm, fname_13)
-    url_14 = url_name(yyyy, mm, fname_14)
-    url_15 = url_name(yyyy, mm, fname_15)
+        url_11 = url_name(yyyy, mm, fname_11)
+        url_13 = url_name(yyyy, mm, fname_13)
+        url_14 = url_name(yyyy, mm, fname_14)
+        url_15 = url_name(yyyy, mm, fname_15)
 
-    data_tbb_11 = file_data_get(url_11, fname_11, band_11)
-    data_tbb_13 = file_data_get(url_13, fname_13, band_13)
-    data_tbb_14 = file_data_get(url_14, fname_14, band_14)
-    data_tbb_15 = file_data_get(url_15, fname_15, band_15)
-    if (data_tbb_11.all() == 0 or data_tbb_13.all() == 0 or data_tbb_14.all() == 0 or data_tbb_15.all() == 0):
-        return
+        data_tbb_11 = file_data_get(url_11, fname_11, band_11)
+        data_tbb_13 = file_data_get(url_13, fname_13, band_13)
+        data_tbb_14 = file_data_get(url_14, fname_14, band_14)
+        data_tbb_15 = file_data_get(url_15, fname_15, band_15)
+        if (data_tbb_11.all() == 0 or data_tbb_13.all() == 0 or data_tbb_14.all() == 0 or data_tbb_15.all() == 0):
+            error_count += 1
+            continue
 
-    now = str(datetime.datetime.now())
-    print(f'{now}     Downloading is finished.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+        now = str(datetime.datetime.now())
+        print(f'{now}     Downloading is finished.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
-    data_diff_tbb_11_14 = np.float32(data_tbb_11 - data_tbb_14)
-    data_diff_tbb_13_15 = np.float32(data_tbb_13 - data_tbb_15)
+        data_diff_tbb_11_14 = np.float32(data_tbb_11 - data_tbb_14)
+        data_diff_tbb_13_15 = np.float32(data_tbb_13 - data_tbb_15)
 
-    now = str(datetime.datetime.now())
-    print(f'{now}     Now Making Ash RGB data: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+        #Himawari Ash RGBクイックガイドを参照 (https://www.data.jma.go.jp/mscweb/ja/prod/pdf/RGB_QG_Ash_jp.pdf)
+        data_red    = AshRGB_data(data_diff_tbb_13_15,  -3.0E0,   7.5E0,  1.0E0, 0)
+        data_green  = AshRGB_data(data_diff_tbb_11_14,  -5.9E0,   5.1E0, 8.5E-1, 0)
+        data_blue   = AshRGB_data(        data_tbb_13, 243.6E0, 303.2E0,  1.0E0, 1)
 
-    #Himawari Ash RGBクイックガイドを参照 (https://www.data.jma.go.jp/mscweb/ja/prod/pdf/RGB_QG_Ash_jp.pdf)
-    data_red    = AshRGB_data(data_diff_tbb_13_15,  -3.0E0,   7.5E0,  1.0E0, 0)
-    data_green  = AshRGB_data(data_diff_tbb_11_14,  -5.9E0,   5.1E0, 8.5E-1, 0)
-    data_blue   = AshRGB_data(        data_tbb_13, 243.6E0, 303.2E0,  1.0E0, 1)
+        data_red_save += data_red
+        data_green_save += data_green
+        data_blue_save += data_blue
 
-    now = str(datetime.datetime.now())
-    print(f'{now}     Now Making Ash RGB data (stack): {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    data_red_save = data_red_save / (24 - error_count)
+    #data_red_save = data_red_save / data_red_save.max()
+
+    data_green_save = data_green_save / (24 - error_count)
+    #data_green_save = data_green_save / data_green_save.max()
+
+    data_blue_save = data_blue_save / (24 - error_count)
+    #data_blue_save = data_blue_save / data_blue_save.max()
 
     try:
-        data_rgb = np.dstack((data_red, data_green, data_blue))
+        data_rgb = np.dstack((data_red_save, data_green_save, data_blue_save))
     except Exception as e:
         print(f"An error occurred: {e}")
-
+        quit()
+    
     #作図
     now = str(datetime.datetime.now())
-    print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd}')
 
-    #fig = plt.figure(figsize=(12, 6), dpi=200)
     fig = plt.figure(figsize=(15, 15), dpi=200)
 
-    #ax1 = fig.add_subplot(121, title=f'{yyyy}/{mm}/{dd} {hh}:{mn} (UTC)', xlabel=r'longitude', ylabel=r'latitude')
-    #ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
-    #ax1.set_xlim(plot_width(width_plot_1_lon, width_plot_1_lat)[0], plot_width(width_plot_1_lon, width_plot_1_lat)[1])
-    #ax1.set_ylim(plot_width(width_plot_1_lon, width_plot_1_lat)[2], plot_width(width_plot_1_lon, width_plot_1_lat)[3])
-    #ax1.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
+    ax1 = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
 
-    ax1 = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd} {hh}:{mn} (UTC)', xlabel=r'longitude', ylabel=r'latitude')
-    #print([lon_min, lon_max, lat_min, lat_max])
-    #print(data_rgb)
     try:
         ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
     except Exception as e:
         print(f"An error occurred: {e}")
-    #print('error2')
     ax1.set_xlim(plot_width(width_plot_2_lon, width_plot_2_lat)[0], plot_width(width_plot_2_lon, width_plot_2_lat)[1])
-    #print('error3')
     ax1.set_ylim(plot_width(width_plot_2_lon, width_plot_2_lat)[2], plot_width(width_plot_2_lon, width_plot_2_lat)[3])
-    #print('error4')
     ax1.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #print('error5')
     ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
-
-    #拡大図
-    #ax2 = fig.add_subplot(122, title=r'enlarged', xlabel=r'longitude', ylabel=r'latitude')
-    #ax2.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
-    #ax2.set_xlim(plot_width(width_plot_2_lon, width_plot_2_lat)[0], plot_width(width_plot_2_lon, width_plot_2_lat)[1])
-    #ax2.set_ylim(plot_width(width_plot_2_lon, width_plot_2_lat)[2], plot_width(width_plot_2_lon, width_plot_2_lat)[3])
-    #ax2.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #ax2.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
 
     #ディレクトリの生成 (ディレクトリは要指定)
     try:
-        os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}')
+        os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average/{yyyy}{mm}')
     except FileExistsError:
         pass
     
     #画像の保存 (保存先は要指定)
-    fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png')
+    fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
     now = str(datetime.datetime.now())
-    print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+    print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
     plt.close()
 
     return
+    
+#main_loop_function((8, 1))
+#quit()
 
-#for month_int in range(start_month, end_month+1):
-#    for day_int in range(1, 32):
-#        for hour_int in range(0, 24):
-#            main_loop_function([month_int, day_int, hour_int])
-
-##並列処理
-#if __name__ == '__main__':
-#    
-#    #プロセス数
-#    num_processes = 1
-#
-#    #並列処理の指定
-#    with Pool(processes=num_processes) as pool:
-#        pool.map(main_loop_function, 
-#                 [(month_int, day_int, hour_int) 
-#                  for month_int in range(start_month, end_month+1)
-#                  for day_int in range(1, 32)
-#                  for hour_int in range(0, 24)],
-#                  chunksize=1)
-        
 if (__name__ == '__main__'):
     # プロセス数
-    num_processes = 1   #1推奨(要するに並列処理不可: ftp最大接続数10の制限の為)
+    num_processes = 2   #1推奨(要するに並列処理不可: ftp最大接続数10の制限の為)
 
     # 非同期処理の指定
     with Pool(processes=num_processes) as pool:
         results = []
         for month_int in range(start_month, end_month+1):
             for day_int in range(1, 32):
-                for hour_int in range(24):
-                    result = pool.apply_async(main_loop_function, [(month_int, day_int, hour_int)])
-                    results.append(result)
+                result = pool.apply_async(main_loop_function, [(month_int, day_int)])
+                results.append(result)
         # 全ての非同期処理の終了を待機
         for result in results:
             result.get()
     
-    print(r'finish')
-    quit()
+        print(r'finish')
+        quit()
