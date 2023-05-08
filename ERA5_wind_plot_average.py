@@ -121,7 +121,7 @@ def main(args, pressure_idx):
     print(path_fig_name)
 
     if (check_file_exists(path_fig_name) == True):
-        print(r'Error: Image file exists')
+    #    print(r'Error: Image file exists')
         return
 
     file_name_EW = get_netcdf(variable_wind_EW, month, day, pressure_idx)
@@ -154,11 +154,7 @@ def main(args, pressure_idx):
     ax = fig.add_subplot(111, title=f'{year}/{str(month).zfill(2)}/{str(day).zfill(2)}     {pressure_idx}' + r' [$\mathrm{hPa}$]')
     cmap = plt.cm.get_cmap('nipy_spectral')
     ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=300, c='black')
-    color_Q = ax.quiver(EW_lons, EW_lats, EW_wind_average, NS_wind_average, wind_speed_average, cmap=cmap, scale=150, headwidth=2, width=0.005)
-
-    sm = plt.cm.ScalarMappable(cmap=cmap)
-    sm.set_array(wind_speed_average)
-    sm.set_clim(0, 30)
+    sm = ax.quiver(EW_lons, EW_lats, EW_wind_average, NS_wind_average, wind_speed_average, cmap=cmap, scale=150, headwidth=2, width=0.005)
 
     # 軸ラベルを設定する
     ax.set_xlabel('longitude')
@@ -169,7 +165,7 @@ def main(args, pressure_idx):
     ax.grid(which='both', axis='both', alpha=0.5)
 
     # カラーバーを表示する
-    fig.colorbar(sm, label=r'wind speed [$\mathrm{m} \, \mathrm{s}^{-1}$]')
+    fig.colorbar(sm, ax=ax, label=r'wind speed [$\mathrm{m} \, \mathrm{s}^{-1}$]')
 
     #画像の保存 (保存先は要指定)
     fig.savefig(path_fig_name)
@@ -197,7 +193,7 @@ def pressure_loop(args):
 if (__name__ == '__main__'):
     
     #プロセス数
-    num_processes = 8
+    num_processes = 16
 
     #並列処理の指定
     with Pool(processes=num_processes) as pool:

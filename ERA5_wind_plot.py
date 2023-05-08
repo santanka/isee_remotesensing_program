@@ -151,11 +151,7 @@ def main(args, pressure_idx):
         ax = fig.add_subplot(111, title=f'{year}/{str(month).zfill(2)}/{str(day).zfill(2)} {str(time_idx).zfill(2)}:00 (UTC)     {pressure_idx}' + r' [$\mathrm{hPa}$]')
         cmap = plt.cm.get_cmap('nipy_spectral')
         ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=300, c='black')
-        color_Q = ax.quiver(EW_lons, EW_lats, EW_wind[time_idx], NS_wind[time_idx], wind_speed[time_idx], cmap=cmap, scale=150, headwidth=2, width=0.005)
-
-        sm = plt.cm.ScalarMappable(cmap=cmap)
-        sm.set_array(wind_speed[time_idx])
-        sm.set_clim(0, 30)
+        sm = ax.quiver(EW_lons, EW_lats, EW_wind[time_idx], NS_wind[time_idx], wind_speed[time_idx], cmap=cmap, scale=150, headwidth=2, width=0.005)
 
         # 軸ラベルを設定する
         ax.set_xlabel('longitude')
