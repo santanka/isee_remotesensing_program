@@ -58,6 +58,19 @@ def get_grid_range_longitude(X, Y):
     return min_grid, max_grid
 
 #時間の変換
+def get_time_from_OPeNDAP():
+    url_time = "https://tds.hycom.org/thredds/dodsC/GLBy0.08/expt_93.0/uv3z.ascii?time[0:1:12952]"
+    response_time = requests.get(url_time)
+    ascii_time = response_time.text.split("\n")
+    time_line = None
+    for i, line in enumerate(ascii_time):
+        if line.startswith("time"):
+            time_line = ascii_time[i+1]
+    time_values = [float(x) for x in time_line.split(',')]
+    return time_values
+
+time_values = get_time_from_OPeNDAP()
+
 def get_time(time):
     time_origin = datetime.datetime(2000, 1, 1, 0, 0, 0)
     elapsed_time = time - time_origin
@@ -66,7 +79,7 @@ def get_time(time):
 
 def get_time_grid(time):
     hours_elapsed_time = get_time(time)
-    dategrid_array = np.genfromtxt('dategrid_hycom.csv', delimiter=',')
+    dategrid_array = np.array(time_values)
     for count_i, element in enumerate(dategrid_array):
         if element == hours_elapsed_time:
             return count_i
@@ -90,6 +103,8 @@ def get_data(year_int, month_int, day_int, hour_int):
         return None, None, None, None, None
     response = requests.get(data_url)
     ascii_data = response.text.split("\n")
+
+    #print(ascii_data)
 
     lat_line = None
     lon_line = None
@@ -255,7 +270,7 @@ def main(args):
     ax.grid(which='both', axis='both', alpha=0.5)
 
     # カラーバーを表示する
-    cbar = fig.colorbar(sm, ax=ax, label=r'wind speed [$\mathrm{m} \, \mathrm{s}^{-1}$]')
+    cbar = fig.colorbar(sm, ax=ax, label=r'ocean flow speed [$\mathrm{m} \, \mathrm{s}^{-1}$]')
 
     #ディレクトリの生成
     mkdir_folder(f'{figure_folder_path}{yyyy}{mm}')
@@ -267,11 +282,12 @@ def main(args):
     return
 
 #main([year_input, 8, 1])
+#quit()
 
 if (__name__ == '__main__'):
     
     #プロセス数
-    num_processes = 8
+    num_processes = 16
 
     #並列処理の指定
     with Pool(processes=num_processes) as pool:
