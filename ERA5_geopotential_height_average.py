@@ -16,8 +16,8 @@ time                = [ '00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '0
 pressure_level      = ['1000', '975', '950', '925', '900', '875', '850', '825', '800', '775', '750', '700', '650', '600', '550', '500', '450', '400', '350']
 file_format         = 'netcdf'
 
-start_month = 6
-end_month = 9
+start_month = 4
+end_month = 5
 
 gravitational_acceleration = 9.80665E0  #[m s-1]
 

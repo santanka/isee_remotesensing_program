@@ -17,8 +17,8 @@ time                = [ '00:00', '01:00', '02:00', '03:00', '04:00', '05:00', '0
 pressure_level      = ['1000', '975', '950', '925', '900', '875', '850', '825', '800', '775', '750', '700', '650', '600', '550', '500', '450', '400', '350']
 file_format         = 'netcdf'
 
-start_month = 6
-end_month = 9
+start_month = 4
+end_month = 5
 
 #西之島の座標
 nishinoshima_lon = 140.879722
@@ -193,7 +193,7 @@ def pressure_loop(args):
 if (__name__ == '__main__'):
     
     #プロセス数
-    num_processes = 16
+    num_processes = 8
 
     #並列処理の指定
     with Pool(processes=num_processes) as pool:

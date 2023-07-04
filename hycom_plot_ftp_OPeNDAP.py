@@ -2,27 +2,45 @@ import os
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 import netCDF4 as nc
 import datetime
 import requests
 import re
 from multiprocessing import Pool
 
+pm_number = 5
+
 #画像のフォルダ
-figure_folder_path = r'/mnt/j/isee_remote_data/hycom_GLBy0.08_expt_93.0_water_speed_daily/'
+figure_folder_path = f'/mnt/j/isee_remote_data/hycom_GLBy0.08_expt_93.0_water_speed_daily_pm{pm_number}/'
 
 #開始日時(1日~31日まで回す)
 year_input  = 2020
-start_month = 6
-end_month = 9
+start_month = 4
+end_month = 5
+
+#データの縮小
+average_num = int((pm_number+1) / 2)
+
+#データの最大値、最小値
+vmin = 0
+vmax = 1
 
 #西之島の座標
 nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
+#pm1: scale=25, headwidth=2, width=0.005, average_num=1
+#pm2: scale=25, headwidth=2, width=0.005, average_num=1
+#pm3: scale=25, headwidth=2, width=0.005, average_num=2
+#pm5: scale=25, headwidth=2, width=0.005, average_num=3
+#pm7.5: scale=25, headwidth=2, width=0.005, average_num=4
+#pm10: scale=25, headwidth=2, width=0.005, average_num=5
+#average_num = int(pm_number / 2)
+
 #プロットする範囲
-width_plot_1_lon = 2E0
-width_plot_1_lat = 2E0
+width_plot_1_lon = float(pm_number)
+width_plot_1_lat = float(pm_number)
 
 lon_1_max = nishinoshima_lon + width_plot_1_lon
 lon_1_min = nishinoshima_lon - width_plot_1_lon
@@ -150,13 +168,36 @@ def get_data(year_int, month_int, day_int, hour_int):
     
     return lat_data, lon_data, water_u_data, water_v_data
 
+def data_average(data, average_num):
+    # 入力の検証
+    if not isinstance(data, np.ndarray) or len(data.shape) not in [1, 2]:
+        raise ValueError("Expected 'data' to be a 1-dimensional or 2-dimensional numpy array")
+
+    # 1次元の場合
+    if len(data.shape) == 1:
+        averaged_data = np.zeros(data.shape[0] // average_num)
+        for i in range(averaged_data.shape[0]):
+            averaged_data[i] = np.nanmean(data[i * average_num : (i + 1) * average_num])
+
+    # 2次元の場合
+    elif len(data.shape) == 2:
+        averaged_data = np.zeros((data.shape[0] // average_num, data.shape[1] // average_num))
+        for i in range(averaged_data.shape[0]):
+            for j in range(averaged_data.shape[1]):
+                averaged_data[i, j] = np.nanmean(data[i * average_num : (i + 1) * average_num, j * average_num : (j + 1) * average_num])
+
+    return averaged_data
+
 #データの日平均
 def get_data_daily(year_int, month_int, day_int):
     lat_data_daily = None
     lon_data_daily = None
     water_u_data_daily = None
     water_v_data_daily = None
-    count_NaN = np.zeros((102, 52))     #本来ならばlat_data, lon_dataから取得するべきだが、今回は固定値
+    lat_data_min_grid, lat_data_max_grid = get_grid_range_latitude(lat_1_min, lat_1_max)
+    lon_data_min_grid, lon_data_max_grid = get_grid_range_longitude(lon_1_min, lon_1_max)
+    count_NaN = np.zeros((lat_data_max_grid - lat_data_min_grid + 1, lon_data_max_grid - lon_data_min_grid + 1))
+    #count_NaN = np.zeros((102, 52))     #本来ならばlat_data, lon_dataから取得するべきだが、今回は固定値
     for hour_idx in range(8):
         hour_int = hour_idx * 3
         lat_data, lon_data, water_u_data, water_v_data = get_data(year_int, month_int, day_int, hour_int)
@@ -181,8 +222,16 @@ def get_data_daily(year_int, month_int, day_int):
             count_NaN += 1
     water_u_data_daily /= np.double(8 - count_NaN)
     water_v_data_daily /= np.double(8 - count_NaN)
-    water_speed_daily = np.sqrt(water_u_data_daily**2 + water_v_data_daily**2)
-    return lat_data_daily, lon_data_daily, water_u_data_daily, water_v_data_daily, water_speed_daily
+
+    #データの縮小
+    lat_data_daily_resize = data_average(lat_data_daily, average_num)
+    lon_data_daily_resize = data_average(lon_data_daily, average_num)
+    water_u_data_daily_resize = data_average(water_u_data_daily, average_num)
+    water_v_data_daily_resize = data_average(water_v_data_daily, average_num)
+
+    water_speed_daily = np.sqrt(water_u_data_daily_resize**2 + water_v_data_daily_resize**2)
+
+    return lat_data_daily_resize, lon_data_daily_resize, water_u_data_daily_resize, water_v_data_daily_resize, water_speed_daily
     
 #日時の確認(うるう年非対応)
 def time_check(month, day):
@@ -255,6 +304,7 @@ def main(args):
     ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}')
     cmap = mpl.colormaps.get_cmap('nipy_spectral')
     ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=300, c='black')
+    
     sm = ax.quiver(lon_data_daily, lat_data_daily, water_u_data_daily, water_v_data_daily, water_speed_daily, cmap=cmap, scale=25, headwidth=2, width=0.005)
 
     #sm = plt.cm.ScalarMappable(cmap=cmap)
@@ -271,6 +321,7 @@ def main(args):
 
     # カラーバーを表示する
     cbar = fig.colorbar(sm, ax=ax, label=r'ocean flow speed [$\mathrm{m} \, \mathrm{s}^{-1}$]')
+    cbar.mappable.set_clim(vmin, vmax)
 
     #ディレクトリの生成
     mkdir_folder(f'{figure_folder_path}{yyyy}{mm}')
@@ -281,7 +332,7 @@ def main(args):
 
     return
 
-#main([year_input, 8, 1])
+#main([year_input, 6, 20])
 #quit()
 
 if (__name__ == '__main__'):

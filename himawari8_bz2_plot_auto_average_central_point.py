@@ -36,13 +36,11 @@ width_plot_1_lat = 10E0
 width_plot_2_lon = 2E0
 width_plot_2_lat = 2E0
 
-width_plot_lat_list = [2E0, 1E0, 5E-1]
-width_plot_lon_list = [2E0, 1E0, 5E-1]
-width_plot_name_list = ['2', '1', '0.5']
+central_data_namelist = ['80_0.5', '80_1', '80_2', '90_0.5', '90_1', '90_2']
 
 #開始日時(1日~31日まで回す)
-start_month = 4
-end_month = 9
+start_month = 8
+end_month = 8
 
 #日時の指定
 def time_and_date(month, day, hour):
@@ -179,10 +177,8 @@ def main_loop_function(args):
     if (time_check(month_int, day_int) == False):
         return
     
-    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-        if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-            if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-                return
+    if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_central_point/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+        return
     
     data_red_save = np.zeros((6000, 6000))
     data_green_save = np.zeros((6000, 6000))
@@ -247,58 +243,41 @@ def main_loop_function(args):
     print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd}')
 
 
-    for count_i in range(len(width_plot_lon_list)):
-        fig = plt.figure(figsize=(15, 15), dpi=200)
-        ax1 = fig.add_subplot(111)
+    fig = plt.figure(figsize=(15, 15), dpi=200)
 
-        try:
-            ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
-        except Exception as e:
-            print(f"An error occurred: {e}")
-        ax1.set_xlim(plot_width(width_plot_lon_list[count_i], width_plot_lat_list[count_i])[0], plot_width(width_plot_lon_list[count_i], width_plot_lat_list[count_i])[1])
-        ax1.set_ylim(plot_width(width_plot_lon_list[count_i], width_plot_lat_list[count_i])[2], plot_width(width_plot_lon_list[count_i], width_plot_lat_list[count_i])[3])
-        #座標軸を表示しない
-        ax1.axis('off')
-        fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
-        #ディレクトリの生成 (ディレクトリは要指定)
-        try:
-            os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[count_i]}/{yyyy}{mm}')
-        except FileExistsError:
-            pass
-        #画像の保存 (保存先は要指定)
-        fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
-        plt.close()
-    
-    now = str(datetime.datetime.now())
-    print(f'{now}     Plotting is finished.: {yyyy}/{mm}/{dd}')
+    ax1 = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
 
-    #fig = plt.figure(figsize=(15, 15), dpi=200, facecolor='black')
+    try:
+        ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    ax1.set_xlim(plot_width(width_plot_2_lon, width_plot_2_lat)[0], plot_width(width_plot_2_lon, width_plot_2_lat)[1])
+    ax1.set_ylim(plot_width(width_plot_2_lon, width_plot_2_lat)[2], plot_width(width_plot_2_lon, width_plot_2_lat)[3])
+    ax1.minorticks_on()
+    ax1.grid(which='both', axis='both', lw='0.5', alpha=0.5)
+    ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=100, c='white', label='Nishinoshima')
 
-    #ax1 = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
-    #ax1 = fig.add_subplot(111)
-
-    #try:
-    #    ax1.imshow(data_rgb, extent=[lon_min, lon_max, lat_min, lat_max])
-    #except Exception as e:
-    #    print(f"An error occurred: {e}")
-    #ax1.set_xlim(plot_width(width_plot_2_lon, width_plot_2_lat)[0], plot_width(width_plot_2_lon, width_plot_2_lat)[1])
-    #ax1.set_ylim(plot_width(width_plot_2_lon, width_plot_2_lat)[2], plot_width(width_plot_2_lon, width_plot_2_lat)[3])
-    #座標軸を表示しない
-    #ax1.axis('off')
-    #ax1.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #ax1.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='white')
+    #幾何中心のプロット
+    central_data_markerlist = ['v', '^', '<', '>', 'D', 'P']
+    for count_i in range(len(central_data_namelist)):
+        if (check_file_exists(f'ash_central_point_{yyyy}{mm}_threshold_{central_data_namelist[count_i]}.csv') == False):
+            continue
+        central_data = np.genfromtxt(f'ash_central_point_{yyyy}{mm}_threshold_{central_data_namelist[count_i]}.csv', delimiter=',')
+        ax1.scatter(central_data[day_int, 0], central_data[day_int, 1], marker=central_data_markerlist[count_i], s=100, label=central_data_namelist[count_i], c='white')
+    ax1.legend(loc='upper left', fontsize=20)
+    fig.tight_layout()
 
     #ディレクトリの生成 (ディレクトリは要指定)
-    #try:
-    #    os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid/{yyyy}{mm}')
-    #except FileExistsError:
-    #    pass
+    try:
+        os.makedirs(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_central_point/{yyyy}{mm}')
+    except FileExistsError:
+        pass
     
     #画像の保存 (保存先は要指定)
-    #fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
-    #now = str(datetime.datetime.now())
-    #print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
-    #plt.close()
+    fig.savefig(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_central_point/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
+    now = str(datetime.datetime.now())
+    print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
+    plt.close()
 
     return
     

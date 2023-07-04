@@ -30,10 +30,10 @@ end_month   = 8
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_nongrid_10_-1_0'
+dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_central_point'
 
 #Chlorophyll-a濃度のプロット範囲
-vmin = 1E-1
+vmin = 1E-2
 vmax = 1E0
 
 #西之島の座標
@@ -208,6 +208,8 @@ def main(args):
 
     yyyy, mm, dd, hh, mn = time_and_date(year=year_int, month=month_int, day=day_int, hour=0)
 
+    mkdir_folder(f'{dir_figure}/{yyyy}{mm}')
+
     
 
     #存在しない日時では、何もしない
@@ -218,11 +220,15 @@ def main(args):
 
 
     #図が存在する場合、何もしない
-    if (check_file_exists(f'{dir_figure}_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-        if (check_file_exists(f'{dir_figure}_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-            if (check_file_exists(f'{dir_figure}_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-                print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
-                return
+    #if (check_file_exists(f'{dir_figure}_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+    #    if (check_file_exists(f'{dir_figure}_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+    #        if (check_file_exists(f'{dir_figure}_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+    #            print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
+    #            return
+    fig_name    = f'{dir_figure}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
+    #if (check_file_exists(fig_name) == True):
+    #    print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
+    #    return
     
     #日平均値の計算
     chlorophyll_daily_mean = calculate_daily_mean(year_int, month_int, day_int)
@@ -236,40 +242,51 @@ def main(args):
     chlorophyll_daily_mean = chlorophyll_daily_mean.astype(float)
     chlorophyll_daily_mean = chlorophyll_daily_mean.where(chlorophyll_daily_mean != 0, np.nan)
 
-    #plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
-    ##プロット
-    #fig = plt.figure(figsize=(15, 15), dpi=100)
-    #ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
-    #im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap='turbo', norm=LogNorm(vmin=vmin, vmax=vmax))
-    #ax.set_xlim(plot_lon_min, plot_lon_max)
-    #ax.set_ylim(plot_lat_min, plot_lat_max)
-    #ax.minorticks_on()
-    #ax.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='black')
-    #plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
-    ##画像の保存
-    #fig.savefig(fig_name)
-    #now = str(datetime.datetime.now())
-    #print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
-    #plt.close()
+    plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
+    #プロット
+    fig = plt.figure(figsize=(15, 15), dpi=100)
+    ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
+    im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax)) #turbo
+    ax.set_xlim(plot_lon_min, plot_lon_max)
+    ax.set_ylim(plot_lat_min, plot_lat_max)
+    ax.minorticks_on()
+    ax.grid(which='both', axis='both', lw='0.5', alpha=0.5)
+    ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=70, c='yellow', label='Nishinoshima')
 
-    for count_i in range(len(width_plot_lon_list)):
-        #ディレクトリの生成
-        mkdir_folder(f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}')
-        fig_name    = f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
-        plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_lon_list[count_i], width_lat=width_plot_lat_list[count_i])
-        #プロット
-        fig = plt.figure(figsize=(15, 15), dpi=200, facecolor='black')
-        ax = fig.add_subplot(111)
-        im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
-        ax.set_xlim(plot_lon_min, plot_lon_max)
-        ax.set_ylim(plot_lat_min, plot_lat_max)
-        fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
-        fig.savefig(fig_name)
-        plt.close()
+    #幾何中心のプロット
+    central_data_namelist = ['0.5', '1', '2']
+    central_data_colorlist = ['red', 'blue', 'green']
+    for count_i in range(len(central_data_namelist)):
+        if (check_file_exists(f'chla_central_point_{yyyy}{mm}_{central_data_namelist[count_i]}.csv') == False):
+            continue
+        central_data = np.genfromtxt(f'chla_central_point_{yyyy}{mm}_{central_data_namelist[count_i]}.csv', delimiter=',')
+        ax.scatter(central_data[day_int, 0], central_data[day_int, 1], marker='o', s=70, label=central_data_namelist[count_i], c=central_data_colorlist[count_i])
+    ax.legend(loc='upper right', fontsize=15)
 
+    plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
+    #画像の保存
+    fig.savefig(fig_name)
     now = str(datetime.datetime.now())
     print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
+    plt.close()
+
+    #for count_i in range(len(width_plot_lon_list)):
+    #    #ディレクトリの生成
+    #    mkdir_folder(f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}')
+    #    fig_name    = f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
+    #    plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_lon_list[count_i], width_lat=width_plot_lat_list[count_i])
+    #    #プロット
+    #    fig = plt.figure(figsize=(15, 15), dpi=200, facecolor='black')
+    #    ax = fig.add_subplot(111)
+    #    im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+    #    ax.set_xlim(plot_lon_min, plot_lon_max)
+    #    ax.set_ylim(plot_lat_min, plot_lat_max)
+    #    fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
+    #    fig.savefig(fig_name)
+    #    plt.close()
+
+    #now = str(datetime.datetime.now())
+    #print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
 
     return
 

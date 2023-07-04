@@ -37,8 +37,8 @@ width_plot_2_lon = 2E0
 width_plot_2_lat = 2E0
 
 #開始日時(1日~31日まで回す)
-start_month = 6
-end_month = 9
+start_month = 4
+end_month = 5
 
 #日時の指定
 def time_and_date(month, day, hour):

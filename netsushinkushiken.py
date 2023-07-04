@@ -1,5 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Computer Modern Roman']
+mpl.rcParams['mathtext.fontset'] = 'cm'
+plt.rcParams["font.size"] = 20
 
 data = np.genfromtxt('/home/satanka/Documents/isee_remotesensing/data/GL820_01_2023-03-07_10-39-49_small.csv', delimiter=',', skip_header=23, encoding='Shift-JIS')
 
@@ -21,8 +28,9 @@ plt.plot(timer, degree_CH5, label=r'CH5')
 plt.plot(timer, degree_CH6, label=r'CH6')
 plt.plot(timer, degree_CH7, label=r'CH7')
 plt.plot(timer, degree_CH9, label=r'CH9')
-plt.xlabel(r'Hour')
-plt.ylabel(r'Temperature [degree]')
-plt.grid(which='both')
+plt.xlabel(r'hour')
+plt.ylabel(r'temperature [${}^{\circ}$C]')
+plt.minorticks_on()
+plt.grid(which='both', alpha=0.3)
 plt.legend()
 plt.show()

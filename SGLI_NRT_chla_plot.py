@@ -14,8 +14,8 @@ ftp_site        = 'apollo.eorc.jaxa.jp'                     # FTPサイトのURL
 
 #プロットする日時
 year_input  = 2020
-start_month = 6
-end_month   = 9
+start_month = 4
+end_month   = 5
 
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 import datetime
 import numpy as np
-from multiprocessing import Pool
 
 
 #以下で扱うデータはJAXAひまわりモニタから引用
@@ -22,17 +21,18 @@ data_lon_min, data_lon_max, data_lat_min, data_lat_max  = 123E0, 150E0, 24E0, 50
 
 #プロットする日時
 year_input  = 2020
-start_month = 4
-end_month = 5
+month_input = 8
+day_input   = 19
+hour_input  = 3        #UTC
 
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_-1to1'
+dir_figure = f''
 
 #Chlorophyll-a濃度のプロット範囲
-vmin = 1E-1
-vmax = 1E1
+vmin = 1E-2
+vmax = 1E2
 
 #西之島の座標
 nishinoshima_lon = 140.879722
@@ -138,16 +138,14 @@ def download_netcdf(year, month, day, hour):
                 print(r'Download file is ' + local_path)
         
     data = xr.open_dataset(ftp_base)
-    os.remove(local_path)
     return data
 
 
 #main function
-def main(args):
-    year_int, month_int, day_int, hour_int = args
+def main(year_int, month_int, day_int, hour_int):
 
     yyyy, mm, dd, hh, mn = time_and_date(year=year_int, month=month_int, day=day_int, hour=hour_int)
-    fig_name    = f'{dir_figure}/{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png'
+    fig_name    = f'{dir_figure}{yyyy}{mm}/{yyyy}{mm}{dd}{hh}{mn}.png'
     print(r'Figure name is ' + fig_name)
 
     #存在しない日時では、何もしない
@@ -156,7 +154,7 @@ def main(args):
         return
     
     #ディレクトリの生成
-    mkdir_folder(f'{dir_figure}/{yyyy}{mm}')
+    mkdir_folder(f'{dir_figure}{yyyy}{mm}')
 
     #図が存在する場合、何もしない
     if (check_file_exists(filename=fig_name) == True):
@@ -183,8 +181,8 @@ def main(args):
                                             ))
     chlorophyll_mask = np.ma.masked_array(chlorophyll, ~mask_region)
 
-    #データにNaN以外の値が300個以上ある場合、プロットする
-    if (np.count_nonzero(~np.isnan(chlorophyll_mask)) >= 300):
+    #プロット範囲にデータが存在する場合のみプロット
+    if not np.isnan(chlorophyll_mask.all()):
         now = str(datetime.datetime.now())
         print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
 
@@ -220,22 +218,5 @@ def main(args):
 
 
 #実行
-#args = [(year_input, 8, 2, 1)]
-#main(args)
-
-
-##並列処理
-if __name__ == '__main__':
-    
-    #プロセス数
-    num_processes = 16
-
-    #並列処理の指定
-    with Pool(processes=num_processes) as pool:
-        pool.map(main, 
-                 [(year_input, month_int, day_int, hour_int) 
-                  for month_int in range(start_month, end_month+1)
-                  for day_int in range(1, 32)
-                  for hour_int in range(0, 24)],
-                  chunksize=1)
-    print(r'Finish')
+main(year_int=year_input, month_int=month_input, day_int=day_input, hour_int=hour_input)
+print(r'Finish')
