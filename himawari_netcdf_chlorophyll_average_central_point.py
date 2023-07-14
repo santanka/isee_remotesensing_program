@@ -226,9 +226,9 @@ def main(args):
     #            print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
     #            return
     fig_name    = f'{dir_figure}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
-    #if (check_file_exists(fig_name) == True):
-    #    print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
-    #    return
+    if (check_file_exists(fig_name) == True):
+        print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
+        return
     
     #日平均値の計算
     chlorophyll_daily_mean = calculate_daily_mean(year_int, month_int, day_int)
@@ -264,6 +264,7 @@ def main(args):
     ax.legend(loc='upper right', fontsize=15)
 
     plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
+    plt.tight_layout()
     #画像の保存
     fig.savefig(fig_name)
     now = str(datetime.datetime.now())
@@ -293,7 +294,7 @@ def main(args):
 
 
 #実行
-#main((year_input, 8, 1))
+#main((year_input, 8, 31))
 #quit()
 
 if (__name__ == '__main__'):
