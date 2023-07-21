@@ -30,7 +30,7 @@ end_month   = 8
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_nongrid_10_-1_0'
+dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_nongrid_median_filter_10_-1_0'
 
 #Chlorophyll-a濃度のプロット範囲
 vmin = 1E-1
@@ -229,6 +229,11 @@ def main(args):
 
     now = str(datetime.datetime.now())
     print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd}')
+
+    #メディアンフィルターをかける
+    chlorophyll_daily_mean = chlorophyll_daily_mean.astype(float)
+    chlorophyll_daily_mean = chlorophyll_daily_mean.where(chlorophyll_daily_mean != 0, np.nan)
+    chlorophyll_daily_mean = chlorophyll_daily_mean.rolling(longitude=4, latitude=4, center=True).median()
 
     #値を[vmin, vmax]に指定
     chlorophyll_daily_mean = xr.where((chlorophyll_daily_mean < vmin) & (chlorophyll_daily_mean != 0), vmin, chlorophyll_daily_mean)
