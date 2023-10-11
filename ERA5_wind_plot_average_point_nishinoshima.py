@@ -126,16 +126,16 @@ def time_check(month, day):
 
 
 #csvファイルの作成
-def main(month, pressure_idx):
+def main(args):
+
+    month, pressure_idx = args
+
     path_dir_name = f'/mnt/j/isee_remote_data/{dataset_short_name}/wind_average_point_nishinoshima/'
 
     #画像データが既にあるかの確認
     csv_file_name = f'{year}{str(month).zfill(2)}_pressure_{pressure_idx}.csv'
     path_csv_name = f'{path_dir_name}{csv_file_name}'
     print(path_csv_name)
-
-    if (check_file_exists(path_csv_name) == True):
-        return
 
     if (check_file_exists(path_dir_name) == False):
         try:
@@ -186,16 +186,6 @@ def main(month, pressure_idx):
     return
 
 
-def pressure_loop(args):
-    month = args
-    for pressure_idx in range(len(pressure_level)):
-        pressure = pressure_level[pressure_idx]
-
-        main(month=month, pressure_idx=pressure)
-
-    return
-
-
 
 #pressure_loop((8, 1))
 #quit()
@@ -209,8 +199,11 @@ if (__name__ == '__main__'):
     with Pool(processes=num_processes) as pool:
         results = []
         for month_int in range(start_month, end_month+1):
-            result = pool.apply_async(pressure_loop, [month_int])
-            results.append(result)
+            for pressure_idx in range(len(pressure_level)):
+                pressure = pressure_level[pressure_idx]
+                args = [(month_int, pressure)]
+                result = pool.apply_async(main, args)
+                results.append(result)
         for result in results:
             result.get()
         

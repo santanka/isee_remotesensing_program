@@ -20,17 +20,14 @@ pixel_number    = 2701
 line_number     = 2601
 data_lon_min, data_lon_max, data_lat_min, data_lat_max  = 123E0, 150E0, 24E0, 50E0
 
-#プロットする日時
+#プロットする年月
 year_input  = 2020
-start_month = 6
-end_month   = 7
-#month_input = 8
-#day_input   = 1
+month_input = 8
 
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_nongrid_median_filter_10_-1_0'
+dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_remove_noise_central_point_smooth_edit'
 
 #Chlorophyll-a濃度のプロット範囲
 vmin = 1E-1
@@ -43,9 +40,6 @@ nishinoshima_lat = 27.243889
 #プロットする範囲(西之島の座標+-width)
 width_plot_1_lon    = 2E0
 width_plot_1_lat    = 2E0
-width_plot_lat_list = [2E0, 1E0, 5E-1]
-width_plot_lon_list = [2E0, 1E0, 5E-1]
-width_plot_name_list = ['2', '1', '0.5']
 
 #カラーマップの設定
 #White to Black
@@ -65,7 +59,7 @@ mpl.rcParams['mathtext.fontset'] = 'cm'
 plt.rcParams["font.size"] = 25
 
 #関数を定義
-#プロットする範囲
+#プロットする範囲を指定する関数
 def plot_width(width_lon, width_lat):
     lon_set_min = nishinoshima_lon - width_lon
     lon_set_max = nishinoshima_lon + width_lon
@@ -82,31 +76,13 @@ def time_and_date(year, month, day, hour):
     mn      = '00'                  #minutes (UTC)
     return yyyy, mm, dd, hh, mn
 
-#日時の確認(うるう年非対応)
-def time_check(month, day):
-    if (month == 2):
-        if (day > 28):
-            return False
-        else:
-            return True
-    elif (month == 4 or month == 6 or month == 9 or month == 11):
-        if (day > 30):
-            return False
-        else:
-            return True
-    else:
-        if (day > 31):
-            return False
-        else:
-            return True
-
 #ファイルの確認
 def check_file_exists(filename):
     if os.path.isfile(filename):
         return True
     else:
         return False
-
+    
 #フォルダの生成
 def mkdir_folder(path_dir_name):
     try:
@@ -162,6 +138,7 @@ def download_netcdf(year, month, day, hour):
     os.remove(local_path)
     return data
 
+#1日の平均値を計算する関数
 def calculate_daily_mean(year_int, month_int, day_int):
     data_sum = None
     count_zeros = None
@@ -201,39 +178,46 @@ def calculate_daily_mean(year_int, month_int, day_int):
 
     return daily_mean
 
+#central_pointのデータを読み込む
+def read_central_point(year, month):
+    yyyy = str(year).zfill(4)
+    mm = str(month).zfill(2)
+    central_point_csv_path = f'chla_central_point_smooth_{yyyy}{mm}_2_edit.csv'
+    #1行目をスキップして読み込む
+    central_point = np.loadtxt(central_point_csv_path, delimiter=',', skiprows=1)
+    central_point_day = central_point[:, 0]
+    central_point_all_longitude = central_point[:, 1]
+    central_point_all_latitude = central_point[:, 2]
+    central_point_a_longitude = central_point[:, 3]
+    central_point_a_latitude = central_point[:, 4]
+    central_point_b_longitude = central_point[:, 5]
+    central_point_b_latitude = central_point[:, 6]
+    return central_point_day, central_point_all_longitude, central_point_all_latitude, central_point_a_longitude, central_point_a_latitude, central_point_b_longitude, central_point_b_latitude
+
 #main function
 def main(args):
+    day_int = args
 
-    year_int, month_int, day_int = args
-
-    yyyy, mm, dd, hh, mn = time_and_date(year=year_int, month=month_int, day=day_int, hour=0)
-
+    central_point_day, central_point_all_longitude, central_point_all_latitude, central_point_a_longitude, central_point_a_latitude, central_point_b_longitude, central_point_b_latitude = read_central_point(year=year_input, month=month_input)
     
+    central_point_day = central_point_day.astype(int)
 
-    #存在しない日時では、何もしない
-    if (time_check(month=month_int, day=day_int) == False):
-        print(f'Error!: {yyyy}/{mm}/{dd} is not existed.')
-        return
-    
-
+    yyyy, mm, dd, hh, mn = time_and_date(year=year_input, month=month_input, day=day_int, hour=0)
 
     #図が存在する場合、何もしない
-    if (check_file_exists(f'{dir_figure}_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-        if (check_file_exists(f'{dir_figure}_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-            if (check_file_exists(f'{dir_figure}_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-                print(f'Error!: {yyyy}/{mm}/{dd} is existed.')
-                return
+    if (check_file_exists(f'{dir_figure}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+        return
     
     #日平均値の計算
-    chlorophyll_daily_mean = calculate_daily_mean(year_int, month_int, day_int)
-
-    now = str(datetime.datetime.now())
-    print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd}')
+    chlorophyll_daily_mean = calculate_daily_mean(year_input, month_input, day_int)
 
     #メディアンフィルターをかける
     chlorophyll_daily_mean = chlorophyll_daily_mean.astype(float)
     chlorophyll_daily_mean = chlorophyll_daily_mean.where(chlorophyll_daily_mean != 0, np.nan)
     chlorophyll_daily_mean = chlorophyll_daily_mean.rolling(longitude=4, latitude=4, center=True).median()
+
+    now = str(datetime.datetime.now())
+    print(f'{now}     Now Plotting: {yyyy}/{mm}/{dd}')
 
     #値を[vmin, vmax]に指定
     chlorophyll_daily_mean = xr.where((chlorophyll_daily_mean < vmin) & (chlorophyll_daily_mean != 0), vmin, chlorophyll_daily_mean)
@@ -241,63 +225,63 @@ def main(args):
     chlorophyll_daily_mean = chlorophyll_daily_mean.astype(float)
     chlorophyll_daily_mean = chlorophyll_daily_mean.where(chlorophyll_daily_mean != 0, np.nan)
 
-    #plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
-    ##プロット
-    #fig = plt.figure(figsize=(15, 15), dpi=100)
-    #ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
-    #im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap='turbo', norm=LogNorm(vmin=vmin, vmax=vmax))
-    #ax.set_xlim(plot_lon_min, plot_lon_max)
-    #ax.set_ylim(plot_lat_min, plot_lat_max)
-    #ax.minorticks_on()
-    #ax.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    #ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='black')
-    #plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
-    ##画像の保存
-    #fig.savefig(fig_name)
-    #now = str(datetime.datetime.now())
-    #print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
-    #plt.close()
+    plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
 
-    for count_i in range(len(width_plot_lon_list)):
-        #ディレクトリの生成
-        mkdir_folder(f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}')
-        fig_name    = f'{dir_figure}_{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
-        plot_lon_min, plot_lon_max, plot_lat_min, plot_lat_max = plot_width(width_lon=width_plot_lon_list[count_i], width_lat=width_plot_lat_list[count_i])
-        #プロット
-        fig = plt.figure(figsize=(15, 15), dpi=200, facecolor='black')
-        ax = fig.add_subplot(111)
-        im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
-        ax.set_xlim(plot_lon_min, plot_lon_max)
-        ax.set_ylim(plot_lat_min, plot_lat_max)
-        fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
-        fig.savefig(fig_name)
-        plt.close()
+    #プロット
+    fig_name = f'{dir_figure}/{yyyy}{mm}/{yyyy}{mm}{dd}.png'
+    mkdir_folder(f'{dir_figure}/{yyyy}{mm}')
+    fig = plt.figure(figsize=(15, 15), dpi=100)
+    
+    ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
+    im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+    ax.set_xlim(plot_lon_min, plot_lon_max)
+    ax.set_ylim(plot_lat_min, plot_lat_max)
+    ax.minorticks_on()
+    ax.grid(which='both', axis='both', lw='0.5', alpha=0.5)
 
+    #西之島の座標をプロット
+    ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=70, c='yellow', label='Nishinoshima')
+
+    #day_intと同じ値のcentral_pointのデータの行番号を取得
+    central_point_index = np.where(central_point_day == day_int)[0][0]
+    #central_pointのデータをプロット
+    ax.scatter(central_point_all_longitude[central_point_index], central_point_all_latitude[central_point_index], marker='o', s=70, c='red', label='Central Point')
+    if (central_point_a_latitude[central_point_index] != 0) and (central_point_a_longitude[central_point_index] != 0):
+        ax.scatter(central_point_a_longitude[central_point_index], central_point_a_latitude[central_point_index], marker='o', s=70, c='blue', label='Central Point A')
+    if (central_point_b_latitude[central_point_index] != 0) and (central_point_b_longitude[central_point_index] != 0):
+        ax.scatter(central_point_b_longitude[central_point_index], central_point_b_latitude[central_point_index], marker='o', s=70, c='green', label='Central Point B')
+    ax.legend(loc='upper right', fontsize=15)
+
+    plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
+    plt.subplots_adjust()
+    plt.tight_layout()
+
+    #画像の保存
+    fig.savefig(fig_name)
     now = str(datetime.datetime.now())
     print(f'{now}     Image is saved.: {yyyy}/{mm}/{dd}')
+    plt.close()
 
     return
 
 
+#並列処理
+if __name__ == '__main__':
 
-#実行
-#main((year_input, 8, 1))
-#quit()
-
-if (__name__ == '__main__'):
-    
     #プロセス数
-    num_processes = 16
+    num_processes = 8
 
-    #並列処理の指定
-    with Pool(processes=num_processes) as pool:
+    day_list = read_central_point(year=year_input, month=month_input)[0]
+    day_list = day_list.astype(int)
+
+    #非同期処理
+    with Pool(num_processes) as p:
         results = []
-        for month_int in range(start_month, end_month+1):
-            for day_int in range(1, 32):
-                result = pool.apply_async(main, [(year_input, month_int, day_int)])
-                results.append(result)
+        for day_int in day_list:
+            result = p.apply_async(main, [(day_int)])
+            results.append(result)
         for result in results:
             result.get()
-        
+
     print(r'finish')
     quit()

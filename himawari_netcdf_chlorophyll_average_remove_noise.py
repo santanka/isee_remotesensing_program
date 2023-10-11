@@ -21,7 +21,7 @@ line_number     = 2601
 data_lon_min, data_lon_max, data_lat_min, data_lat_max  = 123E0, 150E0, 24E0, 50E0
 
 #プロットする日時
-year_input  = 2020
+year_input  = 2022
 start_month = 8
 end_month   = 8
 #month_input = 8
@@ -30,7 +30,7 @@ end_month   = 8
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_remove_noise'
+dir_figure = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_remove_noise_cool_redesign_2_5deg'
 
 #Chlorophyll-a濃度のプロット範囲
 vmin = 1E-1
@@ -41,11 +41,11 @@ nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
 #プロットする範囲(西之島の座標+-width)
-width_plot_1_lon    = 2E0
-width_plot_1_lat    = 2E0
-width_plot_lat_list = [2E0, 1E0, 5E-1]
-width_plot_lon_list = [2E0, 1E0, 5E-1]
-width_plot_name_list = ['2', '1', '0.5']
+width_plot_1_lon    = 5E0
+width_plot_1_lat    = 5E0
+width_plot_lat_list = [5E0, 2E0, 1E0, 5E-1]
+width_plot_lon_list = [5E0, 2E0, 1E0, 5E-1]
+width_plot_name_list = ['5', '2', '1', '0.5']
 
 #カラーマップの設定
 #White to Black
@@ -244,12 +244,12 @@ def main(args):
     mkdir_folder(f'{dir_figure}/{yyyy}{mm}')
     fig = plt.figure(figsize=(15, 15), dpi=100)
     ax = fig.add_subplot(111, title=f'{yyyy}/{mm}/{dd}', xlabel=r'longitude', ylabel=r'latitude')
-    im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap=my_cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
+    im = ax.imshow(chlorophyll_daily_mean, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap='cool', norm=LogNorm(vmin=vmin, vmax=vmax))
     ax.set_xlim(plot_lon_min, plot_lon_max)
     ax.set_ylim(plot_lat_min, plot_lat_max)
     ax.minorticks_on()
     ax.grid(which='both', axis='both', lw='0.5', alpha=0.5)
-    ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=3, c='black')
+    ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=200, c='lightgrey', edgecolors='k')
     plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
     plt.subplots_adjust()
     #画像の保存
@@ -264,12 +264,15 @@ def main(args):
 
 #実行
 #main((year_input, 8, 1))
+#for month_int in range(start_month, end_month+1):
+#    for day_int in range(1, 32):
+#        main((year_input, month_int, day_int))
 #quit()
 
 if (__name__ == '__main__'):
     
     #プロセス数
-    num_processes = 16
+    num_processes = 8
 
     #並列処理の指定
     with Pool(processes=num_processes) as pool:

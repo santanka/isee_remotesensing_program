@@ -36,17 +36,17 @@ width_plot_1_lat = 10E0
 width_plot_2_lon = 2E0
 width_plot_2_lat = 2E0
 
-width_plot_lat_list = [2E0, 1E0, 5E-1]
-width_plot_lon_list = [2E0, 1E0, 5E-1]
-width_plot_name_list = ['2', '1', '0.5']
+width_plot_lat_list = [5E0, 2E0, 1E0, 5E-1]
+width_plot_lon_list = [5E0, 2E0, 1E0, 5E-1]
+width_plot_name_list = ['5', '2', '1', '0.5']
 
 #開始日時(1日~31日まで回す)
-start_month = 4
-end_month = 9
+start_month = 8
+end_month = 8
 
 #日時の指定
 def time_and_date(month, day, hour):
-    yyyy    = '2020'                #year
+    yyyy    = '2022'                #year
     mm      = str(month).zfill(2)   #month
     dd      = str(day).zfill(2)     #day
     hh      = str(hour).zfill(2)    #hour (UTC)
@@ -96,16 +96,17 @@ def file_data_get(url, fname, band):
                 time.sleep(1)
                 break
             except urllib.error.URLError as e:
-                if isinstance(e.reason, str):
-                # FTPのエラーであり、550エラーの場合は再試行しない
-                    if '550' in str(e.reason):
-                        time.sleep(5)
-                        print('File not found. Retry aborted.')
-                        return np.zeros(10)
                 print(f"Connection failed: {e}")
-                now = str(datetime.datetime.now())
-                print(f'{now}     Retrying in 60 seconds...')
-                time.sleep(60)
+                #if isinstance(e.reason, str):
+                # FTPのエラーであり、550エラーの場合は再試行しない
+                if '550' in str(e.reason):
+                    time.sleep(5)
+                    print('File not found. Retry aborted.')
+                    return np.zeros(10)
+                else:
+                    now = str(datetime.datetime.now())
+                    print(f'{now}     Retrying in 30 seconds...')
+                    time.sleep(30)
     _, tbb = np.loadtxt(f"count2tbb_v103/tir.{band}", unpack=True)
     try:
         with bz2.BZ2File(fname) as bz2file:
@@ -182,7 +183,8 @@ def main_loop_function(args):
     if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
         if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
             if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-                return
+                if (check_file_exists(f'/mnt/j/isee_remote_data/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[3]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+                    return
     
     data_red_save = np.zeros((6000, 6000))
     data_green_save = np.zeros((6000, 6000))
@@ -313,7 +315,7 @@ def main_loop_function(args):
 
 if (__name__ == '__main__'):
     # プロセス数
-    num_processes = 4   #1推奨(要するに並列処理不可: ftp最大接続数10の制限の為)
+    num_processes = 8   #1推奨(要するに並列処理不可: ftp最大接続数10の制限の為)
 
     # 非同期処理の指定
     with Pool(processes=num_processes) as pool:
