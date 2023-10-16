@@ -375,12 +375,12 @@ ocean_current_a_angle = np.zeros(len(central_point_day)-1)
 ocean_current_b_angle = np.zeros(len(central_point_day)-1)
 
 for count_i in range(len(central_point_day)-1):
-    chla_move_all_angle[count_i] = np.rad2deg(np.arctan2(chla_v_move_all_unit[count_i], chla_u_move_all_unit[count_i]))
-    chla_move_a_angle[count_i] = np.rad2deg(np.arctan2(chla_v_move_a_unit[count_i], chla_u_move_a_unit[count_i]))
-    chla_move_b_angle[count_i] = np.rad2deg(np.arctan2(chla_v_move_b_unit[count_i], chla_u_move_b_unit[count_i]))
-    ocean_current_all_angle[count_i] = np.rad2deg(np.arctan2(water_v_interpolation_all_unit[count_i], water_u_interpolation_all_unit[count_i]))
-    ocean_current_a_angle[count_i] = np.rad2deg(np.arctan2(water_v_interpolation_a_unit[count_i], water_u_interpolation_a_unit[count_i]))
-    ocean_current_b_angle[count_i] = np.rad2deg(np.arctan2(water_v_interpolation_b_unit[count_i], water_u_interpolation_b_unit[count_i]))
+    chla_move_all_angle[count_i]        = np.rad2deg(np.arctan2(chla_u_move_all_unit[count_i], chla_v_move_all_unit[count_i]))
+    chla_move_a_angle[count_i]          = np.rad2deg(np.arctan2(chla_u_move_a_unit[count_i], chla_v_move_a_unit[count_i]))
+    chla_move_b_angle[count_i]          = np.rad2deg(np.arctan2(chla_u_move_b_unit[count_i], chla_v_move_b_unit[count_i]))
+    ocean_current_all_angle[count_i]    = np.rad2deg(np.arctan2(water_u_interpolation_all_unit[count_i], water_v_interpolation_all_unit[count_i]))
+    ocean_current_a_angle[count_i]      = np.rad2deg(np.arctan2(water_u_interpolation_a_unit[count_i], water_v_interpolation_a_unit[count_i]))
+    ocean_current_b_angle[count_i]      = np.rad2deg(np.arctan2(water_u_interpolation_b_unit[count_i], water_v_interpolation_b_unit[count_i]))
     
 
 mpl.rcParams['text.usetex'] = True
@@ -391,20 +391,20 @@ plt.rcParams["font.size"] = 25
 
 fig = plt.figure(figsize=(14, 28), dpi=100)
 ax_1 = fig.add_subplot(311, xlabel=r'day', ylabel=r'inner product')
-ax_2 = fig.add_subplot(312, xlabel=r'day', ylabel=r'chla move angle')
-ax_3 = fig.add_subplot(313, xlabel=r'day', ylabel=r'ocean current angle')
+ax_2 = fig.add_subplot(312, xlabel=r'day', ylabel=r'chla move angle [deg]')
+ax_3 = fig.add_subplot(313, xlabel=r'day', ylabel=r'ocean current angle [deg]')
 
-ax_1.plot(central_point_day_resize, inner_product_all, color='orange', linewidth=4, label=r'all', alpha=0.8, zorder=10)
-ax_1.plot(central_point_day_resize, inner_product_a, color='blue', linewidth=4, label=r'Point a', alpha=0.8, zorder=10)
-ax_1.plot(central_point_day_resize, inner_product_b, color='green', linewidth=4, label=r'Point b', alpha=0.8, zorder=10)
+ax_1.plot(central_point_day_resize, inner_product_all, color='orange', linewidth=4, label=r'all', alpha=0.8)
+ax_1.plot(central_point_day_resize, inner_product_a, color='blue', linewidth=4, label=r'Point a', alpha=0.8)
+ax_1.plot(central_point_day_resize, inner_product_b, color='green', linewidth=4, label=r'Point b', alpha=0.8)
 
-ax_2.plot(central_point_day_resize, chla_move_all_angle, color='orange', linewidth=4, label=r'all', alpha=0.8, zorder=10)
-ax_2.plot(central_point_day_resize, chla_move_a_angle, color='blue', linewidth=4, label=r'Point a', alpha=0.8, zorder=10)
-ax_2.plot(central_point_day_resize, chla_move_b_angle, color='green', linewidth=4, label=r'Point b', alpha=0.8, zorder=10)
+ax_2.plot(central_point_day_resize, chla_move_all_angle, color='orange', linewidth=4, label=r'all', alpha=0.8)
+ax_2.plot(central_point_day_resize, chla_move_a_angle, color='blue', linewidth=4, label=r'Point a', alpha=0.8)
+ax_2.plot(central_point_day_resize, chla_move_b_angle, color='green', linewidth=4, label=r'Point b', alpha=0.8)
 
-ax_3.plot(central_point_day_resize, ocean_current_all_angle, color='orange', linewidth=4, label=r'all', alpha=0.8, zorder=10)
-ax_3.plot(central_point_day_resize, ocean_current_a_angle, color='blue', linewidth=4, label=r'Point a', alpha=0.8, zorder=10)
-ax_3.plot(central_point_day_resize, ocean_current_b_angle, color='green', linewidth=4, label=r'Point b', alpha=0.8, zorder=10)
+ax_3.plot(central_point_day_resize, ocean_current_all_angle, color='orange', linewidth=4, label=r'all', alpha=0.8)
+ax_3.plot(central_point_day_resize, ocean_current_a_angle, color='blue', linewidth=4, label=r'Point a', alpha=0.8)
+ax_3.plot(central_point_day_resize, ocean_current_b_angle, color='green', linewidth=4, label=r'Point b', alpha=0.8)
 
 
 
@@ -425,9 +425,9 @@ ax_2.grid(which='both', alpha=0.3)
 ax_3.minorticks_on()
 ax_3.grid(which='both', alpha=0.3)
 
-ax_1.legend(fontsize=20)
-ax_2.legend(fontsize=20)
-ax_3.legend(fontsize=20)
+ax_1.legend(loc = 'best')
+ax_2.legend(loc = 'best')
+ax_3.legend(loc = 'best')
 
 plt.tight_layout()
 
