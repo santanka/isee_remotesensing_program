@@ -43,7 +43,9 @@ width_plot_name_list = ['5', '2', '1', '0.5']
 #開始日時(1日~31日まで回す)
 year_int = 2020
 start_month = 6
-end_month = 7
+end_month = 8
+
+dir_name = f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_onlyR_'
 
 #日時の指定
 def time_and_date(year, month, day, hour):
@@ -192,10 +194,10 @@ def main_loop_function(args):
     if (time_check(month_int, day_int) == False):
         return
     
-    if (check_file_exists(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-        if (check_file_exists(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-            if (check_file_exists(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
-                if (check_file_exists(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[3]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+    if (check_file_exists(f'{dir_name}{width_plot_name_list[0]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+        if (check_file_exists(f'{dir_name}{width_plot_name_list[1]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+            if (check_file_exists(f'{dir_name}{width_plot_name_list[2]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
+                if (check_file_exists(f'{dir_name}{width_plot_name_list[3]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png') == True):
                     return
     
     data_red_save = np.zeros((6000, 6000))
@@ -205,55 +207,36 @@ def main_loop_function(args):
     
     for hour_int in range(24):
 
-        if (hour_int < 9) or (hour_int > 15):
-            error_count += 1
-            continue
-
         year_UTC_int, month_UTC_int, day_UTC_int, hour_UTC_int = JST_to_UTC(int(yyyy), int(mm), int(dd), hour_int)
 
-        yyyy, mm, dd, hh, mn = time_and_date(year_UTC_int, month_UTC_int, day_UTC_int, hour_UTC_int)
+        yyyy_UTC, mm_UTC, dd_UTC, hh_UTC, mn_UTC = time_and_date(year_UTC_int, month_UTC_int, day_UTC_int, hour_UTC_int)
 
         now = str(datetime.datetime.now())
-        print(f'{now}     Now Downloading: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+        print(f'{now}     Now Downloading: {yyyy_UTC}/{mm_UTC}/{dd_UTC} {hh_UTC}:{mn_UTC} UTC')
 
-        fname_11 = bz2_filename(yyyy, mm, dd, hh, mn, band_11)
-        fname_13 = bz2_filename(yyyy, mm, dd, hh, mn, band_13)
-        fname_14 = bz2_filename(yyyy, mm, dd, hh, mn, band_14)
-        fname_15 = bz2_filename(yyyy, mm, dd, hh, mn, band_15)
+        fname_13 = bz2_filename(yyyy_UTC, mm_UTC, dd_UTC, hh_UTC, mn_UTC, band_13)
+        fname_15 = bz2_filename(yyyy_UTC, mm_UTC, dd_UTC, hh_UTC, mn_UTC, band_15)
 
-        url_11 = url_name(yyyy, mm, fname_11)
-        url_13 = url_name(yyyy, mm, fname_13)
-        url_14 = url_name(yyyy, mm, fname_14)
-        url_15 = url_name(yyyy, mm, fname_15)
+        url_13 = url_name(yyyy_UTC, mm_UTC, fname_13)
+        url_15 = url_name(yyyy_UTC, mm_UTC, fname_15)
 
-        data_tbb_11 = file_data_get(url_11, fname_11, band_11)
         data_tbb_13 = file_data_get(url_13, fname_13, band_13)
-        data_tbb_14 = file_data_get(url_14, fname_14, band_14)
         data_tbb_15 = file_data_get(url_15, fname_15, band_15)
-        if (data_tbb_11.all() == 0 or data_tbb_13.all() == 0 or data_tbb_14.all() == 0 or data_tbb_15.all() == 0):
+        if (data_tbb_13.all() == 0 or data_tbb_15.all() == 0):
             error_count += 1
             continue
 
         now = str(datetime.datetime.now())
-        print(f'{now}     Downloading is finished.: {yyyy}/{mm}/{dd} {hh}:{mn} UTC')
+        print(f'{now}     Downloading is finished.: {yyyy_UTC}/{mm_UTC}/{dd_UTC} {hh_UTC}:{mn_UTC} UTC')
 
-        data_diff_tbb_11_14 = np.float32(data_tbb_11 - data_tbb_14)
         data_diff_tbb_13_15 = np.float32(data_tbb_13 - data_tbb_15)
 
         #Himawari Ash RGBクイックガイドを参照 (https://www.data.jma.go.jp/mscweb/ja/prod/pdf/RGB_QG_Ash_jp.pdf)
         data_red    = AshRGB_data(data_diff_tbb_13_15,  -3.0E0,   7.5E0,  1.0E0, 0)
-        data_green  = AshRGB_data(data_diff_tbb_11_14,  -5.9E0,   5.1E0, 8.5E-1, 0)
-        data_blue   = AshRGB_data(        data_tbb_13, 243.6E0, 303.2E0,  1.0E0, 1)
 
         data_red_save += data_red
-        data_green_save += data_green
-        data_blue_save += data_blue
 
     data_red_save = data_red_save / (24 - error_count)
-
-    data_green_save = data_green_save / (24 - error_count)
-
-    data_blue_save = data_blue_save / (24 - error_count)
 
     try:
         data_rgb = np.dstack((data_red_save, data_green_save, data_blue_save))
@@ -281,11 +264,11 @@ def main_loop_function(args):
         fig.subplots_adjust(left=0, right=1, bottom=0, top=1)
         #ディレクトリの生成 (ディレクトリは要指定)
         try:
-            os.makedirs(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[count_i]}/{yyyy}{mm}')
+            os.makedirs(f'{dir_name}{width_plot_name_list[count_i]}/{yyyy}{mm}')
         except FileExistsError:
             pass
         #画像の保存 (保存先は要指定)
-        fig.savefig(f'/mnt/j/isee_remote_data/JST/himawari_AshRGB_enlarged_average_nongrid_{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
+        fig.savefig(f'{dir_name}{width_plot_name_list[count_i]}/{yyyy}{mm}/{yyyy}{mm}{dd}.png')
         plt.close()
     
     now = str(datetime.datetime.now())

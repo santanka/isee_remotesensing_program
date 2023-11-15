@@ -22,7 +22,7 @@ data_lon_min, data_lon_max, data_lat_min, data_lat_max  = 123E0, 150E0, 24E0, 50
 
 #プロットする日時
 year_input  = 2020
-start_month = 8
+start_month = 6
 end_month   = 8
 #month_input = 8
 #day_input   = 1

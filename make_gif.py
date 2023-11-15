@@ -1,14 +1,14 @@
 from PIL import Image
 import os
 
-year = 2022
+year = 2020
 
-for month in range (8, 9):
+for month in range (6, 9):
     yyyy = str(year).zfill(4)    #year
     mm      = str(month).zfill(2)   #month
 
     # 画像が含まれるフォルダのパス
-    folder_path = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_remove_noise_cool_redesign_2/{yyyy}{mm}/'
+    folder_path = f'/mnt/j/isee_remote_data/JST/chla_oceanic_current_plot_widespace/{yyyy}{mm}/'
     # 画像を読み込む
     images = []
     for filename in sorted(os.listdir(folder_path)):
@@ -18,5 +18,5 @@ for month in range (8, 9):
             images.append(image)
 
     # GIFファイルに保存する
-    gif_filepath = f'/mnt/j/isee_remote_data/himawari_chlorophyll_average_remove_noise_cool_redesign_2/{yyyy}{mm}/{yyyy}{mm}.gif'
+    gif_filepath = f'/mnt/j/isee_remote_data/JST/chla_oceanic_current_plot_widespace/{yyyy}{mm}/{yyyy}{mm}.gif'
     images[0].save(gif_filepath, save_all=True, append_images=images[1:], duration=500, loop=0)
