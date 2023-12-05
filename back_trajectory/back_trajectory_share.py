@@ -19,14 +19,14 @@ start_lat = 27.6
 #終点の時刻(JST)
 end_year = 2020
 end_month = 7
-end_day = 1
+end_day = 30
 end_hour = 12
 
-#データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
-dir_data = f''
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_figure = f''
-
+#dir_figure = f''
+#以下のようにすると、プログラムと同じディレクトリに保存される
+current_dir = os.path.dirname(os.path.abspath(__file__))
+dir_figure = f'{current_dir}/figure'
 
 
 #####以下、計算に必要な定数や関数の設定#####
@@ -478,6 +478,7 @@ ax.grid(which='both', alpha=0.3)
 fig.tight_layout()
 
 #図の保存
-mkdir_folder(dir_figure)
+if dir_figure != '':
+    mkdir_folder(dir_figure)
 fig_name = f'{dir_figure}/back_trajectory_{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat:.1f}_{start_lon:.1f}.png'
 fig.savefig(fig_name)
