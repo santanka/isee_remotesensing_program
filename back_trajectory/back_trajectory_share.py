@@ -10,16 +10,16 @@ import pyproj
 #####入力データの設定#####
 #始点の座標[deg]、時刻(JST)
 start_year = 2020
-start_month = 7
-start_day = 31
+start_month = 8
+start_day = 22
 start_hour = 12
-start_lon = 141.7
-start_lat = 27.6
+start_lon = 141.0
+start_lat = 26.5
 
 #終点の時刻(JST)
 end_year = 2020
-end_month = 7
-end_day = 30
+end_month = 8
+end_day = 1
 end_hour = 12
 
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
@@ -30,6 +30,19 @@ dir_figure = f'{current_dir}/figure'
 
 
 #####以下、計算に必要な定数や関数の設定#####
+
+#入力データの確認
+start_time = datetime.datetime(start_year, start_month, start_day, start_hour, 0, 0)
+end_time = datetime.datetime(end_year, end_month, end_day, end_hour, 0, 0)
+print(r"Start time: " + str(start_time))
+print(r"End time: " + str(end_time))
+if start_time < end_time:
+    print(r"Error: You must set the start time later than the end time.")
+    quit()
+print(r'start_point: ' + f'{start_lat:.1f}' + r'N, ' + f'{start_lon:.1f}' + r'E')
+print(r'Figure will be saved in ' + dir_figure + r'.')
+print(r'Please wait for a while...')
+print(r'   ')
 
 #西之島の座標
 nishinoshima_lon = 140.879722
