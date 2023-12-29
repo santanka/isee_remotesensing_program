@@ -1,33 +1,71 @@
 import os
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 import datetime
 import numpy as np
 import requests
 import re
 from multiprocessing import Pool
 import pyproj
+import time
+import ftplib
+import xarray as xr
 
 #####入力データの設定#####
-#始点の座標[deg]、時刻(JST)
+#始点の時刻(JST)
 start_year = 2020
 start_month = 8
 start_day = 22
 start_hour = 12
-start_lon = 141.0
-start_lat = 26.5
 
 #終点の時刻(JST)
 end_year = 2020
 end_month = 8
-end_day = 1
+end_day = 20
 end_hour = 12
 
+#始点の緯度経度範囲
+start_lon_min = 141.0
+start_lon_max = 142.0
+start_lat_min = 27.0
+start_lat_max = 28.0
+grid_width = 0.1
+
+#計算・表示する緯度経度範囲
+pm_number = 2
+width_plot_1_lon    = pm_number
+width_plot_1_lat    = pm_number
+
+#西之島の緯度経度
+nishinoshima_lon = 140.879722
+nishinoshima_lat = 27.243889
+
+#データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
 #dir_figure = f''
 #以下のようにすると、プログラムと同じディレクトリに保存される
 current_dir = os.path.dirname(os.path.abspath(__file__))
-dir_figure = f'{current_dir}/figure'
+dir_data = f'{current_dir}/data/back_trajectory_manypoints_test'
+dir_figure = f'{current_dir}/figure/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.1f}'
 
+#並列処理の数をPCの最大コア数に設定
+parallel_number = os.cpu_count()
+print(f'Number of parallel processes: {parallel_number}')
+
+#JAXAひまわりモニタからchlaのデータをダウンロード
+#https://www.eorc.jaxa.jp/ptree/userguide_j.html
+ftp_site        = 'ftp.ptree.jaxa.jp'                   # FTPサイトのURL
+ftp_user        = 'koseki.saito_stpp.gp.tohoku.ac.jp'   # FTP接続に使用するユーザー名
+ftp_password    = 'SP+wari8'                            # FTP接続に使用するパスワード
+
+#1km日本域のデータを使用(24N-50N, 123E-150Eの矩形領域)
+pixel_number    = 2701
+line_number     = 2601
+data_lon_min, data_lon_max, data_lat_min, data_lat_max  = 123E0, 150E0, 24E0, 50E0
+
+#Chlorophyll-a濃度のプロット範囲
+chla_vmin = 1E-1
+chla_vmax = 1E0
 
 #####以下、計算に必要な定数や関数の設定#####
 
@@ -39,19 +77,9 @@ print(r"End time: " + str(end_time))
 if start_time < end_time:
     print(r"Error: You must set the start time later than the end time.")
     quit()
-print(r'start_point: ' + f'{start_lat:.1f}' + r'N, ' + f'{start_lon:.1f}' + r'E')
 print(r'Figure will be saved in ' + dir_figure + r'.')
 print(r'Please wait for a while...')
 print(r'   ')
-
-#西之島の座標
-nishinoshima_lon = 140.879722
-nishinoshima_lat = 27.243889
-
-#プロットする範囲(西之島の座標+-width)
-pm_number = 2
-width_plot_1_lon    = pm_number
-width_plot_1_lat    = pm_number
 
 #図の書式の指定
 plt.rcParams["font.size"] = 25
@@ -102,6 +130,7 @@ def mkdir_folder(path_dir_name):
         pass
     return
 
+mkdir_folder(dir_figure)
 
 #oceanic current関連
 #緯度の範囲(X < Y)
@@ -182,7 +211,18 @@ def get_data(year_int, month_int, day_int, hour_int, lat_min, lat_max, lon_min, 
     data_url = make_url(datetime.datetime(year_UTC, month_UTC, day_UTC, hour_UTC, 0, 0), lat_min, lat_max, lon_min, lon_max)
     if data_url == None:
         return None, None, None, None
-    response = requests.get(data_url)
+    
+    #response = requests.get(data_url)をtry-exceptで囲み、エラーが出たら30秒後再度リクエストを送るようにする
+    while True:
+        try:
+            response = requests.get(data_url)
+            break
+        except:
+            print("Error: requests.get(data_url)")
+            print("Wait for 30 seconds...")
+            time.sleep(30)
+            continue
+
     ascii_data = response.text.split("\n")
 
     #print(ascii_data)
@@ -275,48 +315,8 @@ def ocean_current_bilinear_interporation(year_int, month_int, day_int, hour_int,
 
     return water_u_interpolation, water_v_interpolation
 
-
-#バックトラジェクトリー関連
-
-dt = 3 * 60 * 60 #時間刻み
-
-#Euler法(delta_t = dt)
-def euler_method(year, month, day, hour, lon, lat):
-    delta_t = np.double(dt)
-    water_u, water_v = ocean_current_bilinear_interporation(year, month, day, hour, lat, lon)
-    dx = water_u * - delta_t
-    dy = water_v * - delta_t
-    dr = np.sqrt(dx**2 + dy**2)
-    theta = np.arctan2(dy, dx)
-    azimuth = (theta * 180 / np.pi - 90) * -1
-    lon_new, lat_new, _ = pyproj.Geod(ellps='WGS84').fwd(lon, lat, azimuth, dr)
-    return lon_new, lat_new
-
-#improved Euler法
-def improved_euler_method(year, month, day, hour, lon, lat):
-    delta_t = np.double(dt)
-    water_u, water_v = ocean_current_bilinear_interporation(year, month, day, hour, lat, lon)
-    dx = water_u * -delta_t
-    dy = water_v * -delta_t
-    dr = np.sqrt(dx**2 + dy**2)
-    theta = np.arctan2(dy, dx)
-    azimuth = (theta * 180 / np.pi - 90) * -1
-    lon_new, lat_new, _ = pyproj.Geod(ellps='WGS84').fwd(lon, lat, azimuth, dr)
-
-    water_u_new, water_v_new = ocean_current_bilinear_interporation(year, month, day, hour, lat_new, lon_new)
-    dx_new = water_u_new * -delta_t
-    dy_new = water_v_new * -delta_t
-    dr_new = np.sqrt(dx_new**2 + dy_new**2)
-    theta_new = np.arctan2(dy_new, dx_new)
-    azimuth_new = (theta_new * 180 / np.pi - 90) * -1
-    lon_new_2, lat_new_2, _ = pyproj.Geod(ellps='WGS84').fwd(lon, lat, azimuth_new, dr_new)
-
-    lon_new = (lon_new + lon_new_2) / 2
-    lat_new = (lat_new + lat_new_2) / 2
-
-    return lon_new, lat_new
-
 #4次Runge-Kutta法(delta_t = 2*dt)
+dt = 3 * 60 * 60 #時間刻み
 def runge_kutta_method(year, month, day, hour, lon, lat):
     delta_t_int = 2 * dt
     delta_t_double = np.double(delta_t_int)
@@ -371,130 +371,134 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
 
     return lon_new, lat_new
 
+#chla関連
+#ダウンロードするファイルのパスの生成
+def download_path(year, month, day, hour):
+    yyyy, mm, dd, hh, mn = time_and_date(year=year, month=month, day=day, hour=hour)
+    if(year < 2022):
+        ver = '010'
+        nn = '08'
+    elif(year == 2022):
+        if(month <= 9):
+            ver = '010'
+            nn = '08'
+        elif(month >= 10):
+            ver = '021'
+            nn = '09'
+    elif(year >= 2023):
+        ver = '021'
+        nn = '09'
+    
+    pixel = str(pixel_number).zfill(5)
+    line = str(line_number).zfill(5)
+    ftp_path = f'/pub/himawari/L3/CHL/{ver}/{yyyy}{mm}/{dd}/H{nn}_{yyyy}{mm}{dd}_{hh}{mn}_1H_rOC{ver}_FLDK.{pixel}_{line}.nc'
+    return ftp_path
 
-#バックトラジェクトリーの計算
-latitude_euler = np.array([start_lat])
-longitude_euler = np.array([start_lon])
-latitude_improved_euler = np.array([start_lat])
-longitude_improved_euler = np.array([start_lon])
-latitude_runge_kutta = np.array([start_lat])
-longitude_runge_kutta = np.array([start_lon])
+#ファイルのダウンロード、データを返す
+def download_netcdf(year, month, day, hour):
+    ftp_path = download_path(year=year, month=month, day=day, hour=hour)
+    ftp_base = os.path.basename(ftp_path)
+    local_path = os.path.join(dir_data, ftp_base)
 
-if start_hour != 12:
-    latitude_euler_12 = np.array([])
-    longitude_euler_12 = np.array([])
-    latitude_improved_euler_12 = np.array([])
-    longitude_improved_euler_12 = np.array([])
-    latitude_runge_kutta_12 = np.array([])
-    longitude_runge_kutta_12 = np.array([])
-else:
-    latitude_euler_12 = np.array([start_lat])
-    longitude_euler_12 = np.array([start_lon])
-    latitude_improved_euler_12 = np.array([start_lat])
-    longitude_improved_euler_12 = np.array([start_lon])
-    latitude_runge_kutta_12 = np.array([start_lat])
-    longitude_runge_kutta_12 = np.array([start_lon])
+    if (check_file_exists(local_path) == False):              #ファイルが存在しない場合、ダウンロードする
+        try:
+            with ftplib.FTP(ftp_site) as ftp:
+                ftp.login(user=ftp_user, passwd=ftp_password)   #ログイン
+                ftp.cwd('/')                                    #ルートディレクトリに移動
 
-date_initial = datetime.datetime(start_year, start_month, start_day, start_hour, 0, 0)
-date_end = datetime.datetime(end_year, end_month, end_day, end_hour, 0, 0)
-
-date_euler = np.array([date_initial])
-date_improved_euler = np.array([date_initial])
-date_runge_kutta = np.array([date_initial])
-
-#Euler法
-def euler_calc(date_initial, date_end, longitude_euler, latitude_euler, date_euler, longitude_euler_12, latitude_euler_12):
-    date_euler_now = date_initial
-    while(date_euler_now > date_end):
-        date_euler_now = date_euler_now + datetime.timedelta(seconds=-dt)
-        year, month, day, hour = date_euler_now.year, date_euler_now.month, date_euler_now.day, date_euler_now.hour
-        lon, lat = euler_method(year, month, day, hour, longitude_euler[-1], latitude_euler[-1])
-        latitude_euler = np.append(latitude_euler, lat)
-        longitude_euler = np.append(longitude_euler, lon)
-        date_euler = np.append(date_euler, date_euler_now)
-        if date_euler_now.hour == 12:
-            latitude_euler_12 = np.append(latitude_euler_12, lat)
-            longitude_euler_12 = np.append(longitude_euler_12, lon)
-    return longitude_euler, latitude_euler, date_euler, longitude_euler_12, latitude_euler_12
-
-##improved Euler法
-def improved_euler_calc(date_initial, date_end, longitude_improved_euler, latitude_improved_euler, date_improved_euler, longitude_improved_euler_12, latitude_improved_euler_12):
-    date_improved_euler_now = date_initial
-    while(date_improved_euler_now > date_end):
-        date_improved_euler_now = date_improved_euler_now + datetime.timedelta(seconds=-dt)
-        year, month, day, hour = date_improved_euler_now.year, date_improved_euler_now.month, date_improved_euler_now.day, date_improved_euler_now.hour
-        lon, lat = improved_euler_method(year, month, day, hour, longitude_improved_euler[-1], latitude_improved_euler[-1])
-        latitude_improved_euler = np.append(latitude_improved_euler, lat)
-        longitude_improved_euler = np.append(longitude_improved_euler, lon)
-        date_improved_euler = np.append(date_improved_euler, date_improved_euler_now)
-        if date_improved_euler_now.hour == 12:
-            latitude_improved_euler_12 = np.append(latitude_improved_euler_12, lat)
-            longitude_improved_euler_12 = np.append(longitude_improved_euler_12, lon)
-    return longitude_improved_euler, latitude_improved_euler, date_improved_euler, longitude_improved_euler_12, latitude_improved_euler_12
-
-#4次Runge-Kutta法
-def runge_kutta_calc(date_initial, date_end, longitude_runge_kutta, latitude_runge_kutta, date_runge_kutta, longitude_runge_kutta_12, latitude_runge_kutta_12):
-    date_runge_kutta_now = date_initial
-    while(date_runge_kutta_now > date_end):
-        date_runge_kutta_now = date_runge_kutta_now + datetime.timedelta(seconds=-2*dt)
-        year, month, day, hour = date_runge_kutta_now.year, date_runge_kutta_now.month, date_runge_kutta_now.day, date_runge_kutta_now.hour
-        lon, lat = runge_kutta_method(year, month, day, hour, longitude_runge_kutta[-1], latitude_runge_kutta[-1])
-        latitude_runge_kutta = np.append(latitude_runge_kutta, lat)
-        longitude_runge_kutta = np.append(longitude_runge_kutta, lon)
-        date_runge_kutta = np.append(date_runge_kutta, date_runge_kutta_now)
-        if date_runge_kutta_now.hour == 12:
-            latitude_runge_kutta_12 = np.append(latitude_runge_kutta_12, lat)
-            longitude_runge_kutta_12 = np.append(longitude_runge_kutta_12, lon)
-    return longitude_runge_kutta, latitude_runge_kutta, date_runge_kutta, longitude_runge_kutta_12, latitude_runge_kutta_12
-
-
-#プロット(軌道のみ)
-#緯度経度の範囲
-lon_1_min, lon_1_max, lat_1_min, lat_1_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
-
-#図のサイズ
-fig = plt.figure(figsize=(15, 15), dpi=100)
-ax = fig.add_subplot(111, xlim=(lon_1_min, lon_1_max), ylim=(lat_1_min, lat_1_max), xlabel='Longitude', ylabel='Latitude')
-ax.set_title('Start: ' + str(start_year) + '/' + str(start_month) + '/' + str(start_day) + ' ' + str(start_hour) + ':00' + ' JST, End: ' + str(end_year) + '/' + str(end_month) + '/' + str(end_day) + ' ' + str(end_hour) + ':00' + ' JST')
-
-def main(args):
-    if args == 0:
-        longitude, latitude, date, longitude_12, latitude_12 = euler_calc(date_initial, date_end, longitude_euler, latitude_euler, date_euler, longitude_euler_12, latitude_euler_12)
-    elif args == 1:
-        longitude, latitude, date, longitude_12, latitude_12 = improved_euler_calc(date_initial, date_end, longitude_improved_euler, latitude_improved_euler, date_improved_euler, longitude_improved_euler_12, latitude_improved_euler_12)
-    elif args == 2:
-        longitude, latitude, date, longitude_12, latitude_12 = runge_kutta_calc(date_initial, date_end, longitude_runge_kutta, latitude_runge_kutta, date_runge_kutta, longitude_runge_kutta_12, latitude_runge_kutta_12)
-    return longitude, latitude, date, longitude_12, latitude_12, args
-
-if __name__ == '__main__':
-    count_list = [0, 1, 2]
-
-    with Pool(3) as p:
-        results = p.map(main, count_list)
+                with open(local_path, 'wb') as f:                 #ファイルをバイナリモードでダウンロード
+                    ftp.retrbinary(f'RETR {ftp_path}', f.write)
+                    print(r'Download file is ' + local_path)
+        except Exception as e:
+            print(f"Error downloading file: {e}")
+            return np.zeros((line_number, pixel_number))
         
-    for result in results:
-        if result[5] == 0:
-            longitude_euler, latitude_euler, date_euler, longitude_euler_12, latitude_euler_12 = result[0], result[1], result[2], result[3], result[4]
-            ax.plot(longitude_euler, latitude_euler, color='hotpink', label='Euler', linewidth=2, marker='o', zorder=5, alpha=0.5)
-            ax.scatter(longitude_euler_12, latitude_euler_12, marker='*', s=150, c='hotpink', label='Euler at 12:00', edgecolors='k', zorder=10)
-        elif result[5] == 1:
-            longitude_improved_euler, latitude_improved_euler, date_improved_euler, longitude_improved_euler_12, latitude_improved_euler_12 = result[0], result[1], result[2], result[3], result[4]
-            ax.plot(longitude_improved_euler, latitude_improved_euler, color='deepskyblue', label='Improved Euler', linewidth=2, marker='o', zorder=5, alpha=0.5)
-            ax.scatter(longitude_improved_euler_12, latitude_improved_euler_12, marker='*', s=150, c='deepskyblue', label='Improved Euler at 12:00', edgecolors='k', zorder=10)
-        elif result[5] == 2:
-            longitude_runge_kutta, latitude_runge_kutta, date_runge_kutta, longitude_runge_kutta_12, latitude_runge_kutta_12 = result[0], result[1], result[2], result[3], result[4]
-            ax.plot(longitude_runge_kutta, latitude_runge_kutta, color='limegreen', label='4th Runge-Kutta', linewidth=2, marker='o', zorder=5, alpha=0.5)
-            ax.scatter(longitude_runge_kutta_12, latitude_runge_kutta_12, marker='*', s=150, c='limegreen', label='4th Runge-Kutta at 12:00', edgecolors='k', zorder=10)
+    data = xr.open_dataset(ftp_base)
+    if data is None:
+        return np.zeros((line_number, pixel_number))
+    os.remove(local_path)
+    
+    data_chla = data['chlor_a'].fillna(0)  # 欠損値に0を代入
+    return data_chla
 
-ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=200, c='lightgrey', label='Nishinoshima', edgecolors='k', zorder=1)
-ax.scatter(longitude_euler[0], latitude_euler[0], marker='o', s=200, c='orange', label=r'Start point: ' + f'{start_lat:.1f}' + r'N, ' + f'{start_lon:.1f}' + r'E', edgecolors='k', zorder=1)
-ax.legend()
-ax.minorticks_on()
-ax.grid(which='both', alpha=0.3)
-fig.tight_layout()
+#chlaのメディアンフィルタ&vmin, vmaxの設定
+def median_filter(data, filter_size):
+    data = data.astype(np.float64)
+    data = data.where(data != 0, np.nan)
+    data = data.rolling(longitude=filter_size, latitude=filter_size, center=True).median()
 
-#図の保存
-if dir_figure != '':
-    mkdir_folder(dir_figure)
-fig_name = f'{dir_figure}/back_trajectory_{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat:.1f}_{start_lon:.1f}.png'
-fig.savefig(fig_name)
+    data = xr.where((data < chla_vmin) & (data != 0), chla_vmin, data)
+    data = xr.where(data > chla_vmax, chla_vmax, data)
+    data = data.astype(float)
+    data = data.where(data != 0, np.nan)
+    return data
+
+#データのプロット&保存
+lon_plot_min, lon_plot_max, lat_plot_min, lat_plot_max = plot_width(width_lon=width_plot_1_lon, width_lat=width_plot_1_lat)
+def figure_plot(time_now, lat_array, lon_array):
+    fig = plt.figure(figsize=(15, 15), dpi=100)
+    ax = fig.add_subplot(111, xlim=(lon_plot_min, lon_plot_max), ylim=(lat_plot_min, lat_plot_max), xlabel='Longitude', ylabel='Latitude')
+    ax.set_title('Start: ' + str(start_year) + '/' + str(start_month) + '/' + str(start_day) + ' ' + str(start_hour) + ':00' + ' JST, End: ' + str(end_year) + '/' + str(end_month) + '/' + str(end_day) + ' ' + str(end_hour) + ':00' + ' JST' + '\n' + 'Time: ' + str(time_now) + ' JST')
+
+    #chlaのデータをダウンロード&プロット
+    data_chla = download_netcdf(year=time_now.year, month=time_now.month, day=time_now.day, hour=time_now.hour)
+    data_chla = median_filter(data=data_chla, filter_size=4)
+    im = ax.imshow(data_chla, extent=[data_lon_min, data_lon_max, data_lat_min, data_lat_max], cmap='cool', norm=LogNorm(vmin=chla_vmin, vmax=chla_vmax))
+    plt.colorbar(im, label=r'Chlorophyll-a [$\mathrm{mg / m^{3}}$]')
+    plt.subplots_adjust()
+
+    #初期位置の範囲を四角で囲う
+    ax.plot([start_lon_min, start_lon_min], [start_lat_min, start_lat_max], color='k', linewidth=4, alpha=0.6, label='Initial area')
+    ax.plot([start_lon_min, start_lon_max], [start_lat_max, start_lat_max], color='k', linewidth=4, alpha=0.6)
+    ax.plot([start_lon_max, start_lon_max], [start_lat_max, start_lat_min], color='k', linewidth=4, alpha=0.6)
+    ax.plot([start_lon_max, start_lon_min], [start_lat_min, start_lat_min], color='k', linewidth=4, alpha=0.6)
+
+    #西之島の位置をプロット
+    ax.scatter(nishinoshima_lon, nishinoshima_lat, marker='o', s=200, c='lightgrey', label='Nishinoshima', edgecolors='k', zorder=1)
+
+    #結果をプロット
+    ax.scatter(lon_array, lat_array, marker='o', s=200, c='limegreen', edgecolors='k', zorder=10)
+
+    ax.minorticks_on()
+    ax.grid(which='both', alpha=0.3)
+    ax.legend()
+    plt.tight_layout()
+    fig_name = f'{dir_figure}/figure_{time_now.year}{time_now.month:02}{time_now.day:02}{time_now.hour:02}{time_now.minute:02}.png'
+    fig.savefig(fig_name)
+    plt.close()
+    return
+
+#初期データ
+LAT_data, LON_data = np.meshgrid(np.arange(start_lat_min, start_lat_max + 1E-11, grid_width), np.arange(start_lon_min, start_lon_max + 1E-11, grid_width))
+LAT_data = LAT_data.flatten()
+LON_data = LON_data.flatten()
+figure_plot(time_now=start_time, lat_array=LAT_data, lon_array=LON_data)
+
+quit()
+
+#バックトラジェクトリの計算
+now_time = start_time
+while now_time > end_time:
+    print(r"   ")
+    print(r"Now Calculating: " + str(now_time))
+    
+    #バックトラジェクトリの計算
+    LAT_data_new = np.array([])
+    LON_data_new = np.array([])
+
+    #並列処理
+    if __name__ == '__main__':
+        with Pool(parallel_number) as p:
+            results = p.starmap(runge_kutta_method, [(now_time.year, now_time.month, now_time.day, now_time.hour, lon, lat) for lon, lat in zip(LON_data, LAT_data)])
+            for result in results:
+                if lon_plot_min <= result[0] <= lon_plot_max and lat_plot_min <= result[1] <= lat_plot_max:
+                    LAT_data_new = np.append(LAT_data_new, result[1])
+                    LON_data_new = np.append(LON_data_new, result[0])
+    
+    #次の時刻へ
+    now_time = now_time + datetime.timedelta(seconds=-2*dt)
+
+    #結果のプロット
+    figure_plot(time_now=now_time, lat_array=LAT_data_new, lon_array=LON_data_new)
+
+print(r"Finished.")
