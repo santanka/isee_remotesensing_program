@@ -55,12 +55,10 @@ nishinoshima_lat = 27.243889
 
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
-dir_data = f''
 #以下のようにすると、プログラムと同じディレクトリに保存される
-#current_dir = os.path.dirname(os.path.abspath(__file__))
-#dir_data = f'{current_dir}/data/back_trajectory_manypoints_test'
-#dir_figure = f'{current_dir}/figure/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.1f}'
-dir_figure = f'/mnt/j/isee_remote_data/JST/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.2f}'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+dir_data = f'{current_dir}/data/back_trajectory_manypoints_test'
+dir_figure = f'{current_dir}/figure/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.1f}'
 dir_figure_ash = f'{dir_figure}/AshRGB'
 dir_figure_chla = f'{dir_figure}/Chla'
 
@@ -72,8 +70,8 @@ print(f'Number of parallel processes: {parallel_number}')
 #JAXAひまわりモニタからchlaのデータをダウンロード
 #https://www.eorc.jaxa.jp/ptree/userguide_j.html
 ftp_site        = 'ftp.ptree.jaxa.jp'                   # FTPサイトのURL
-ftp_user        = 'koseki.saito_stpp.gp.tohoku.ac.jp'   # FTP接続に使用するユーザー名
-ftp_password    = 'SP+wari8'                            # FTP接続に使用するパスワード
+ftp_user        = 'username'   # FTP接続に使用するユーザー名
+ftp_password    = 'password'                            # FTP接続に使用するパスワード
 #1km日本域のデータを使用(24N-50N, 123E-150Eの矩形領域)
 pixel_number_chla    = 2701
 line_number_chla     = 2601
@@ -110,11 +108,7 @@ print(r'Figure will be saved in ' + dir_figure + r'.')
 print(r'Please wait for a while...')
 print(r'   ')
 
-#図の書式の指定(設定ではLaTeX調になっています)
-mpl.rcParams['text.usetex'] = True
-mpl.rcParams['font.family'] = 'serif'
-mpl.rcParams['font.serif'] = ['Computer Modern Roman']
-mpl.rcParams['mathtext.fontset'] = 'cm'
+#図の書式の指定
 plt.rcParams["font.size"] = 25
 
 #関数を定義
@@ -502,7 +496,7 @@ def download_netcdf(year, month, day, hour):
                     time.sleep(10)  # 10秒間待機して再試行
     
     try:
-        data = xr.open_dataset(local_path, engine='h5netcdf')
+        data = xr.open_dataset(local_path, engine='netcdf4')
     except OSError as e:
         print(f"Error opening file: {e}")
         print(f"File path: {local_path}")

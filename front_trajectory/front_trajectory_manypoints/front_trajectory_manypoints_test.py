@@ -23,44 +23,44 @@ import pandas as pd
 #####入力データの設定#####
 #始点の時刻(JST)
 start_year = 2020
-start_month = 7
-start_day = 25
+start_month = 6
+start_day = 26
 start_hour = 12
 
 #終点の時刻(JST)
 end_year = 2020
 end_month = 7
-end_day = 1
+end_day = 8
 end_hour = 12
 
+#西之島の緯度経度
+nishinoshima_lon = 140.879722
+nishinoshima_lat = 27.243889
+
 #始点の緯度経度範囲
-start_lon_min = 141.9
-start_lon_max = 142.3
-start_lat_min = 27.6
-start_lat_max = 27.8
+start_lon_min = nishinoshima_lon - 0.2
+start_lon_max = nishinoshima_lon + 0.2
+start_lat_min = nishinoshima_lat - 0.2
+start_lat_max = nishinoshima_lat + 0.2
 grid_width = 0.05
 
 #chla/AshRGBのプロットの有無
 chla_channel = True
-AshRGB_channel = False
+AshRGB_channel = True
 
 #計算・表示する緯度経度範囲
 pm_number = 2
 width_plot_1_lon    = pm_number
 width_plot_1_lat    = pm_number
 
-#西之島の緯度経度
-nishinoshima_lon = 140.879722
-nishinoshima_lat = 27.243889
-
 #データファイルの保存先のディレクトリ (形式: hoge/hogehoge)
 #プロットした図の保存先のディレクトリ (形式: hoge/hogehoge)
 dir_data = f''
 #以下のようにすると、プログラムと同じディレクトリに保存される
 #current_dir = os.path.dirname(os.path.abspath(__file__))
-#dir_data = f'{current_dir}/data/back_trajectory_manypoints_test'
-#dir_figure = f'{current_dir}/figure/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.1f}'
-dir_figure = f'/mnt/j/isee_remote_data/JST/back_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.2f}'
+#dir_data = f'{current_dir}/data/front_trajectory_manypoints_test'
+#dir_figure = f'{current_dir}/figure/front_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.1f}'
+dir_figure = f'/mnt/j/isee_remote_data/JST/front_trajectory_manypoints_test/{start_year}{start_month:02}{start_day:02}{start_hour:02}_{end_year}{end_month:02}{end_day:02}{end_hour:02}_{start_lat_min:.1f}_{start_lat_max:.1f}_{start_lon_min:.1f}_{start_lon_max:.1f}_{grid_width:.2f}'
 dir_figure_ash = f'{dir_figure}/AshRGB'
 dir_figure_chla = f'{dir_figure}/Chla'
 
@@ -103,8 +103,8 @@ start_time = datetime.datetime(start_year, start_month, start_day, start_hour, 0
 end_time = datetime.datetime(end_year, end_month, end_day, end_hour, 0, 0)
 print(r"Start time: " + str(start_time))
 print(r"End time: " + str(end_time))
-if start_time < end_time:
-    print(r"Error: You must set the start time later than the end time.")
+if start_time > end_time:
+    print(r'Error: start time is faster than end time.')
     quit()
 print(r'Figure will be saved in ' + dir_figure + r'.')
 print(r'Please wait for a while...')
@@ -389,9 +389,9 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
     delta_t_double = np.double(delta_t_int)
     date_initial = datetime.datetime(year, month, day, hour, 0, 0)
     date_k1 = date_initial
-    date_k2 = date_initial + datetime.timedelta(seconds=-delta_t_int/2)
-    date_k3 = date_initial + datetime.timedelta(seconds=-delta_t_int/2)
-    date_k4 = date_initial + datetime.timedelta(seconds=-delta_t_int)
+    date_k2 = date_initial + datetime.timedelta(seconds=delta_t_int/2)
+    date_k3 = date_initial + datetime.timedelta(seconds=delta_t_int/2)
+    date_k4 = date_initial + datetime.timedelta(seconds=delta_t_int)
 
     lon_initial = lon
     lat_initial = lat
@@ -400,8 +400,8 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
     water_u_k1, water_v_k1 = ocean_current_bilinear_interporation(date_k1.year, date_k1.month, date_k1.day, date_k1.hour, lat_initial, lon_initial)
     if water_u_k1 != water_u_k1 or water_v_k1 != water_v_k1:
         return np.nan, np.nan
-    dx_k1 = water_u_k1 * - delta_t_double / 2
-    dy_k1 = water_v_k1 * - delta_t_double / 2
+    dx_k1 = water_u_k1 * delta_t_double / 2
+    dy_k1 = water_v_k1 * delta_t_double / 2
     dr_k1 = np.sqrt(dx_k1**2 + dy_k1**2)
     theta_k1 = np.arctan2(dy_k1, dx_k1)
     azimuth_k1 = (theta_k1 * 180 / np.pi - 90) * -1
@@ -411,8 +411,8 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
     water_u_k2, water_v_k2 = ocean_current_bilinear_interporation(date_k2.year, date_k2.month, date_k2.day, date_k2.hour, lat_k1, lon_k1)
     if water_u_k2 != water_u_k2 or water_v_k2 != water_v_k2:
         return np.nan, np.nan
-    dx_k2 = water_u_k2 * - delta_t_double / 2
-    dy_k2 = water_v_k2 * - delta_t_double / 2
+    dx_k2 = water_u_k2 * delta_t_double / 2
+    dy_k2 = water_v_k2 * delta_t_double / 2
     dr_k2 = np.sqrt(dx_k2**2 + dy_k2**2)
     theta_k2 = np.arctan2(dy_k2, dx_k2)
     azimuth_k2 = (theta_k2 * 180 / np.pi - 90) * -1
@@ -422,8 +422,8 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
     water_u_k3, water_v_k3 = ocean_current_bilinear_interporation(date_k3.year, date_k3.month, date_k3.day, date_k3.hour, lat_k2, lon_k2)
     if water_u_k3 != water_u_k3 or water_v_k3 != water_v_k3:
         return np.nan, np.nan
-    dx_k3 = water_u_k3 * - delta_t_double
-    dy_k3 = water_v_k3 * - delta_t_double
+    dx_k3 = water_u_k3 * delta_t_double
+    dy_k3 = water_v_k3 * delta_t_double
     dr_k3 = np.sqrt(dx_k3**2 + dy_k3**2)
     theta_k3 = np.arctan2(dy_k3, dx_k3)
     azimuth_k3 = (theta_k3 * 180 / np.pi - 90) * -1
@@ -437,8 +437,8 @@ def runge_kutta_method(year, month, day, hour, lon, lat):
     water_u_slope = (water_u_k1 + 2 * water_u_k2 + 2 * water_u_k3 + water_u_k4) / 6E0
     water_v_slope = (water_v_k1 + 2 * water_v_k2 + 2 * water_v_k3 + water_v_k4) / 6E0
 
-    dx = water_u_slope * - delta_t_double
-    dy = water_v_slope * - delta_t_double
+    dx = water_u_slope * delta_t_double
+    dy = water_v_slope * delta_t_double
     dr = np.sqrt(dx**2 + dy**2)
     theta = np.arctan2(dy, dx)
     azimuth = (theta * 180 / np.pi - 90) * -1
@@ -812,6 +812,14 @@ def figure_plot_ash(time_now, lat_array, lon_array):
 LAT_data, LON_data = np.meshgrid(np.arange(start_lat_min, start_lat_max + 1E-11, grid_width), np.arange(start_lon_min, start_lon_max + 1E-11, grid_width))
 LAT_data = LAT_data.flatten()
 LON_data = LON_data.flatten()
+#LAT_data == nishinoshima_lat and LON_data == nishinoshima_lonのデータをnanにする
+#浮動小数点数の誤差を考慮して±1E-8の範囲で判定
+LAT_data[(LON_data > nishinoshima_lon - 1E-8) & (LON_data < nishinoshima_lon + 1E-8) & (LAT_data > nishinoshima_lat - 1E-8) & (LAT_data < nishinoshima_lat + 1E-8)] = np.nan
+LON_data[LAT_data != LAT_data] = np.nan
+#nanを削除
+LAT_data = LAT_data[~np.isnan(LAT_data)]
+LON_data = LON_data[~np.isnan(LON_data)]
+
 if chla_channel is True:
     figure_plot_chla(time_now=start_time, lat_array=LAT_data, lon_array=LON_data)
 if AshRGB_channel is True:
@@ -821,7 +829,7 @@ if AshRGB_channel is True:
 
 #バックトラジェクトリの計算
 now_time = start_time
-while now_time > end_time:
+while now_time < end_time:
     print(r"   ")
     print(r"Now Calculating: " + str(now_time) + " JST")
 
@@ -842,7 +850,7 @@ while now_time > end_time:
                     LON_data_new = np.append(LON_data_new, result[0])
     
     #次の時刻へ
-    now_time = now_time + datetime.timedelta(seconds=-2*dt)
+    now_time = now_time + datetime.timedelta(seconds=2*dt)
 
     #結果のプロット
     if chla_channel is True:
@@ -858,22 +866,22 @@ while now_time > end_time:
 #画像をgifに変換、時刻が新しい順に並び替え
 if chla_channel is True:
     images = []
-    for filename in sorted(os.listdir(dir_figure_chla), reverse=True):
+    for filename in sorted(os.listdir(dir_figure_chla)):
         if filename.endswith('.png'):
             filepath = os.path.join(dir_figure_chla, filename)
             image = Image.open(filepath)
             images.append(image)
-    gif_filepath = os.path.join(dir_figure_chla, 'back_trajectory.gif')
+    gif_filepath = os.path.join(dir_figure_chla, 'front_trajectory.gif')
     images[0].save(gif_filepath, save_all=True, append_images=images[1:], duration=500, loop=0)
 
 if AshRGB_channel is True:
     images = []
-    for filename in sorted(os.listdir(dir_figure_ash), reverse=True):
+    for filename in sorted(os.listdir(dir_figure_ash)):
         if filename.endswith('.png'):
             filepath = os.path.join(dir_figure_ash, filename)
             image = Image.open(filepath)
             images.append(image)
-    gif_filepath = os.path.join(dir_figure_ash, 'back_trajectory.gif')
+    gif_filepath = os.path.join(dir_figure_ash, 'front_trajectory.gif')
     images[0].save(gif_filepath, save_all=True, append_images=images[1:], duration=500, loop=0)
 
 print(r"Finished.")
