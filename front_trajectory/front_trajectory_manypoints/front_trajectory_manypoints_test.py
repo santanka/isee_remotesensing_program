@@ -23,14 +23,14 @@ import pandas as pd
 #####入力データの設定#####
 #始点の時刻(JST)
 start_year = 2020
-start_month = 6
-start_day = 26
-start_hour = 12
+start_month = 7
+start_day = 13
+start_hour = 0
 
 #終点の時刻(JST)
 end_year = 2020
 end_month = 7
-end_day = 8
+end_day = 27
 end_hour = 12
 
 #西之島の緯度経度
@@ -40,8 +40,8 @@ nishinoshima_lat = 27.243889
 #始点の緯度経度範囲
 start_lon_min = nishinoshima_lon - 0.2
 start_lon_max = nishinoshima_lon + 0.2
-start_lat_min = nishinoshima_lat - 0.2
-start_lat_max = nishinoshima_lat + 0.2
+start_lat_min = nishinoshima_lat - 0.05
+start_lat_max = nishinoshima_lat + 0.35
 grid_width = 0.05
 
 #chla/AshRGBのプロットの有無

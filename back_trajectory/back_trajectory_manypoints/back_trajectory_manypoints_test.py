@@ -23,26 +23,26 @@ import pandas as pd
 #####入力データの設定#####
 #始点の時刻(JST)
 start_year = 2020
-start_month = 7
-start_day = 25
+start_month = 8
+start_day = 1
 start_hour = 12
 
 #終点の時刻(JST)
 end_year = 2020
 end_month = 7
-end_day = 1
+end_day = 10
 end_hour = 12
 
 #始点の緯度経度範囲
 start_lon_min = 141.9
-start_lon_max = 142.3
-start_lat_min = 27.6
-start_lat_max = 27.8
+start_lon_max = 142.2
+start_lat_min = 27.5
+start_lat_max = 27.7
 grid_width = 0.05
 
 #chla/AshRGBのプロットの有無
-chla_channel = True
-AshRGB_channel = False
+chla_channel = False
+AshRGB_channel = True
 
 #計算・表示する緯度経度範囲
 pm_number = 2
