@@ -1,16 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
 import datetime
 import os
 
 TIR_number = 5
 
-start_year = 2015
-start_month = 7
+start_year = 2019
+start_month = 11
 
-end_year = 2023
-end_month = 12
+end_year = 2020
+end_month = 9
 
 path_dir = f'/mnt/j/isee_remote_data/JST/himawari8_radiance_data/TIR_{TIR_number:02}/'
 path_figure_dir = f'{path_dir}figure/'
@@ -24,7 +26,7 @@ mpl.rcParams['text.usetex'] = True
 mpl.rcParams['font.family'] = 'serif'
 mpl.rcParams['font.serif'] = ['Computer Modern Roman']
 mpl.rcParams['mathtext.fontset'] = 'cm'
-plt.rcParams["font.size"] = 25
+plt.rcParams["font.size"] = 35
 
 #データの読み込み
 #{start_year:04}{start_month:02}_JST.csvから{end_year:04}{end_month:02}_JST.csvまでのデータを読み込む
@@ -62,14 +64,38 @@ ax.scatter(data_date, data_mean_K, s=50, c='blue', label='Mean', alpha=0.8)
 
 ax.legend(loc='upper left')
 ax.minorticks_on()
-ax.grid(which='both', alpha=0.3, axis='y')
-ax.grid(which='both', alpha=0.3, axis='x')
+ax.grid(which='both', alpha=0.5, axis='y')
+ax.grid(which='both', alpha=0.5, axis='x')
 
-ax.tick_params(axis='x', which='major', labelrotation=45)
+#3ヶ月ごとにminor locatorを設定、形式: 1行目は空白、2行目は月
+#1月1日にmajor locatorを設定、start_monthが1以外の場合はstart_month月1日にmajor locatorを設定
+start_date = data_date[0]
+start_day = start_date.day
+print(start_day)
+
+# Generate a list of major locator ticks
+major_locator_tick = []
+# Check if start_month is January; if not, add the first tick for the start_month of the start_year
+major_locator_tick.append(datetime.datetime(start_year, start_month, start_day))
+# Add January 1st of each year from start_year to end_year (inclusive)
+for year in range(start_year + 1, end_year + 1):
+    major_locator_tick.append(datetime.datetime(year, 1, 1))
+print(major_locator_tick)
+# Convert datetime objects to matplotlib date format
+major_locator_tick = [mdates.date2num(date) for date in major_locator_tick]
+
+ax.xaxis.set_major_locator(mticker.FixedLocator(major_locator_tick))
+ax.xaxis.set_minor_locator(mpl.dates.MonthLocator(interval=1))
+ax.xaxis.set_major_formatter(mpl.dates.DateFormatter('%m \\\ \\\ %Y'))
+ax.xaxis.set_minor_formatter(mpl.dates.DateFormatter('%m'))
+
+#x軸の目盛りを45度回転
+#plt.xticks(rotation=45)
 
 ax.set_xlim([data_date[0], data_date[-1]])
 ax.set_ylim([vmin, vmax])
 
+#plt.tight_layout()
 #plt.show()
 plt.savefig(f'{path_figure}.png', bbox_inches='tight', pad_inches=0.05)
 plt.savefig(f'{path_figure}.pdf', bbox_inches='tight', pad_inches=0.05)
