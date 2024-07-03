@@ -3,7 +3,7 @@ import subprocess
 import multiprocessing
 
 # Define the directory containing the bz2 files
-directory = f'/mnt/j/isee_remote_data/Trichodesmium/MODIS_data_L1A'
+directory = f'/mnt/j/isee_remote_data/Trichodesmium/MODIS_data_L1A_202007/T_hdf_bz2'
 
 def process_file(filename):
     if filename.endswith('.L1A_LAC.x.hdf.bz2'):

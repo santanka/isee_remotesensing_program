@@ -3,8 +3,8 @@ import subprocess
 import datetime
 
 # Define the directory containing the files
-directory_base = '/mnt/j/isee_remote_data/Trichodesmium/MODIS_data_L1A'
-DataSource = 'AQUA'
+directory_base = '/mnt/j/isee_remote_data/Trichodesmium/MODIS_data_L1A_202007'
+DataSource = 'TERRA'
 
 if DataSource == 'AQUA':
     directory_x_hdf = f'{directory_base}/A_x_hdf'
@@ -17,7 +17,7 @@ else:
     quit()
 
 # Get all the .x.hdf files and .GEO.hdf files and sort them by name
-l1a_files = sorted([f for f in os.listdir(directory_x_hdf) if f.endswith('LAC')])
+l1a_files = sorted([f for f in os.listdir(directory_x_hdf) if f.endswith('LAC.x.hdf')])
 l1b_files = sorted([f for f in os.listdir(directory_geo_hdf) if f.endswith('.GEO.hdf')])
 
 # ファイルの一致の確認
@@ -47,9 +47,9 @@ def process_files(l1a_file_path, lib_file_path):
     print(command)
     subprocess.run(command, shell=True)
     
-process_files(os.path.join(directory_x_hdf, l1a_files[0]), os.path.join(directory_geo_hdf, l1b_files[0]))
+#process_files(os.path.join(directory_x_hdf, l1a_files[0]), os.path.join(directory_geo_hdf, l1b_files[0]))
 
-quit()
+#quit()
 for l1a, l1b in zip(l1a_files, l1b_files):
     l1a_file_path = os.path.join(directory_x_hdf, l1a)
     l1b_file_path = os.path.join(directory_geo_hdf, l1b)
