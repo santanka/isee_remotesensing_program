@@ -207,9 +207,6 @@ def calculate_average(year_JST, month_JST, day_JST):
 def median_filter_chla(data, filter_size):
     data = data.astype(np.float64)
     data = data.rolling(longitude=filter_size, latitude=filter_size, center=True).median()
-
-    data = xr.where((data < chla_vmin) & (data != 0), chla_vmin, data)
-    data = xr.where(data > chla_vmax, chla_vmax, data)
     data = data.astype(np.float64)
     data = data.where(data != 0, np.nan)
     return data

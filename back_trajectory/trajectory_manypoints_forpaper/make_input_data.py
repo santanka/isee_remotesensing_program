@@ -7,8 +7,8 @@ import socket
 import time
 
 # directory
-back_or_forward = 'forward'
-input_condition = 4
+back_or_forward = 'back'
+input_condition = 5
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -33,14 +33,14 @@ if os.path.isfile(file_name_time):
 
 # start time
 start_year = 2020
-start_month = 6
-start_day = 17
-start_hour = 6
+start_month = 7
+start_day = 4
+start_hour = 12
 
 # end time
 end_year = 2020
 end_month = 6
-end_day = 30
+end_day = 20
 end_hour = 12
 
 start_time = datetime.datetime(start_year, start_month, start_day, start_hour)
@@ -61,15 +61,15 @@ nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
 # chla region
-chla_lon_min = nishinoshima_lon - 0.2
-chla_lon_max = nishinoshima_lon + 0.2
-chla_lat_min = nishinoshima_lat - 0.2
-chla_lat_max = nishinoshima_lat + 0.2
+chla_lon_min = 141.5
+chla_lon_max = 142.5
+chla_lat_min = 27.5
+chla_lat_max = 28.0
 
 chla_grid_interval = 0.05
 chla_vmin_input = 0.15
 nan_input = False
-all_input = True
+all_input = False
 
 chla_lon = np.arange(chla_lon_min, chla_lon_max+1E-6, chla_grid_interval)
 chla_lat = np.arange(chla_lat_min, chla_lat_max+1E-6, chla_grid_interval)
@@ -243,11 +243,7 @@ def calculate_7hours_average(year, month, day, hour):
 #chlaのメディアンフィルタ&vmin, vmaxの設定
 def median_filter_chla(data, filter_size):
     data = data.astype(np.float64)
-    #data = data.where(data != 0, np.nan)
     data = data.rolling(longitude=filter_size, latitude=filter_size, center=True).median()
-
-    data = xr.where((data < chla_vmin) & (data != 0), chla_vmin, data)
-    data = xr.where(data > chla_vmax, chla_vmax, data)
     data = data.astype(float)
     data = data.where(data != 0, np.nan)
     return data
