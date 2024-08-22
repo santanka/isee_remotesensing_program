@@ -24,8 +24,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # directory
-back_or_forward = 'back'
-input_condition = 3
+back_or_forward = 'forward'
+input_condition = 2
+trajectory_plot = False
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -64,28 +65,29 @@ while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= e
     elif back_or_forward == 'forward':
         now_time = now_time + datetime.timedelta(hours=6)
 
-#input_datetime = datetime.datetime(start_year_JST, start_month_JST, start_day_JST, 0) + datetime.timedelta(days=1)
-#input_datetime_list = [
-#    input_datetime,
-#    input_datetime + datetime.timedelta(hours=6),
-#    input_datetime + datetime.timedelta(hours=12),
-#    input_datetime + datetime.timedelta(hours=18),
-#    #input_datetime + datetime.timedelta(days=1)
-#    ]
+input_datetime = datetime.datetime(start_year_JST, start_month_JST, start_day_JST, 0) + datetime.timedelta(days=8)
+input_datetime = datetime.datetime(2020, 7, 4, 0) + datetime.timedelta(days=2)
+input_datetime_list = [
+   input_datetime,
+   input_datetime + datetime.timedelta(hours=6),
+   input_datetime + datetime.timedelta(hours=12),
+   #input_datetime + datetime.timedelta(hours=18),
+   #input_datetime + datetime.timedelta(days=1)
+    ]
 #input_datetime_list = [
 #    input_datetime,
 #    input_datetime - datetime.timedelta(hours=6),
-#    input_datetime - datetime.timedelta(hours=12),
-#    input_datetime - datetime.timedelta(hours=18)
+#    #input_datetime - datetime.timedelta(hours=12),
+#    #input_datetime - datetime.timedelta(hours=18)
 #    ]
 
-input_datetime_list = [
-    datetime.datetime(2020, 7, 4, 12),
-    datetime.datetime(2020, 7, 1, 12),
-    datetime.datetime(2020, 6, 28, 18), 
-    datetime.datetime(2020, 6, 20, 12),
-    #datetime.datetime(2020, 6, 16, 6),
-    ]
+#input_datetime_list = [
+#    datetime.datetime(2020, 6, 20, 12),
+#    datetime.datetime(2020, 6, 28, 18),
+#    datetime.datetime(2020, 7, 1, 12),
+#    datetime.datetime(2020, 7, 4, 12), 
+#    #datetime.datetime(2020, 6, 16, 6),
+#    ]
 
 
 
@@ -107,10 +109,10 @@ initial_latitude, initial_longitude = read_point_file()
 
 # trajectory file
 def read_trajectory_file_for_width(now_time):
-    file_name_trajectory = os.path.dirname(file_name_time) + f'/trajectory_{now_time.year}_{now_time.month}_{now_time.day}_{now_time.hour}.csv'
+    file_name_trajectory = os.path.dirname(file_name_time) + f'/trajectory_chla_{now_time.year}_{now_time.month}_{now_time.day}_{now_time.hour}.csv'
     trajectory = np.loadtxt(file_name_trajectory, delimiter=',')
-    latitude = trajectory[:, 1]
-    longitude = trajectory[:, 0]
+    latitude = trajectory[:, 2]
+    longitude = trajectory[:, 1]
     max_latitude = np.max(latitude)
     min_latitude = np.min(latitude)
     max_longitude = np.max(longitude)
@@ -568,7 +570,7 @@ mpl.rcParams['mathtext.fontset'] = 'cm'
 font_size = 20
 plt.rcParams["font.size"] = font_size
 
-if back_or_forward == 'forward':
+if back_or_forward == 'forward' and trajectory_plot == True:
     fig = plt.figure(figsize=(10, (input_datetime_num+0.2)*5*ratio_lat_lon))
     markersize = 15
 
@@ -604,7 +606,7 @@ if back_or_forward == 'forward':
     cbar_distance = plt.colorbar(sm_distance, cax=ax_cbar_2, orientation='horizontal')
     cbar_distance.set_label(r'Initial Distance from Nishinoshima [km]', fontsize=font_size*1.2)
 
-elif back_or_forward == 'back':
+elif back_or_forward == 'back' or trajectory_plot == False:
     fig = plt.figure(figsize=(10, (input_datetime_num+0.1)*5*ratio_lat_lon))
     markersize = 15
 
@@ -630,10 +632,10 @@ elif back_or_forward == 'back':
 
 def plot_map(ax, now_time, count_i, chl_or_ash):
     # load trajectory file
-    file_name_trajectory = os.path.dirname(file_name_time) + f'/trajectory_{now_time.year}_{now_time.month}_{now_time.day}_{now_time.hour}.csv'
+    file_name_trajectory = os.path.dirname(file_name_time) + f'/trajectory_chla_{now_time.year}_{now_time.month}_{now_time.day}_{now_time.hour}.csv'
     trajectory = np.loadtxt(file_name_trajectory, delimiter=',')
-    latitude = trajectory[:, 1]
-    longitude = trajectory[:, 0]
+    latitude = trajectory[:, 2]
+    longitude = trajectory[:, 1]
 
     # plot setting
     ax.set_xlim(plot_longitude_min, plot_longitude_max)
@@ -670,6 +672,8 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
 
         # download data
         data_ash = calculate_7hours_average_ash(year=now_time_UTC.year, month=now_time_UTC.month, day=now_time_UTC.day, hour=now_time_UTC.hour)
+        if data_ash.size == 0:
+            raise ValueError('data_ash is empty')
 
         # ash data is different from plot range, so cut the data
         # ash data is 6000x6000 pixels and longitude is 85-205, latitude is -60-60
@@ -680,7 +684,13 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
         index_lat_min = int(np.ceil((lat_max_ash - plot_latitude_max) / (lat_max_ash - lat_min_ash) * line_number_ash))
         index_lat_max = int(np.floor((lat_max_ash - plot_latitude_min) / (lat_max_ash - lat_min_ash) * line_number_ash))
 
+        if index_lon_min < 0 or index_lon_max > pixel_number_ash or index_lat_min < 0 or index_lat_max > line_number_ash:
+            raise ValueError('index is out of range')
+
         data_ash_cut = data_ash[index_lat_min:index_lat_max, index_lon_min:index_lon_max, :]
+
+        if data_ash_cut.size == 0:
+            raise ValueError('data_ash_cut is empty')
 
 
         # plot ash
@@ -697,9 +707,9 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
 
     # plot trajectory # colorをcbar_distanceに合わせる
     #ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    if back_or_forward == 'forward':
+    if back_or_forward == 'forward' and trajectory_plot == True:
         ax.scatter(longitude, latitude, c=distance_list, cmap=cmap_color_distance, edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    elif back_or_forward == 'back':
+    elif back_or_forward == 'back' and trajectory_plot == True:
         ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
 
 

@@ -11,8 +11,8 @@ import socket
 import xarray as xr
 
 # directory
-back_or_forward = 'back'
-input_condition = 5
+back_or_forward = 'forward'
+input_condition = 2
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -531,7 +531,14 @@ CHLA_data = np.array([chla_bilinear_interporation(chla_data, lat, lon) for lat, 
 #INDEX_dataのfmtはint, LON_data, LAT_data, CHLA_dataのfmtは%.5f
 np.savetxt(file_name, np.c_[INDEX_data, LON_data, LAT_data, CHLA_data], delimiter=',', fmt='%d,%.5f,%.5f,%.5f')
 
-while (now_time > end_time_JST and back_or_forward == 'back') or (now_time < end_time_JST and back_or_forward == 'forward'):
+while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= end_time_JST and back_or_forward == 'forward'):
+    
+    # update
+    if back_or_forward == 'back':
+        now_time = now_time + datetime.timedelta(seconds=-2*dt)
+    elif back_or_forward == 'forward':
+        now_time = now_time + datetime.timedelta(seconds=2*dt)
+    
     print(r"  ")
     print(r"Now Calculating: " + str(now_time) + " JST")
 
@@ -558,12 +565,6 @@ while (now_time > end_time_JST and back_or_forward == 'back') or (now_time < end
                     INDEX_data_new = np.append(INDEX_data_new, result[2])
                     CHLA_data_new = np.append(CHLA_data_new, chla_bilinear_interporation(chla_data, result[1], result[0]))
 
-     # update
-    if back_or_forward == 'back':
-        now_time = now_time + datetime.timedelta(seconds=-2*dt)
-    elif back_or_forward == 'forward':
-        now_time = now_time + datetime.timedelta(seconds=2*dt)   
-    
     # save
     file_name = os.path.dirname(file_name_point) + f'/trajectory_chla_{now_time.year}_{now_time.month}_{now_time.day}_{now_time.hour}.csv'
     np.savetxt(file_name, np.c_[INDEX_data_new, LON_data_new, LAT_data_new, CHLA_data_new], delimiter=',', fmt='%d,%.5f,%.5f,%.5f')
@@ -571,6 +572,8 @@ while (now_time > end_time_JST and back_or_forward == 'back') or (now_time < end
     LAT_data = LAT_data_new
     LON_data = LON_data_new
     INDEX_data = INDEX_data_new
+
+    
 
 
 print(r'Finished.')

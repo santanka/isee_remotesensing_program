@@ -7,8 +7,8 @@ import socket
 import time
 
 # directory
-back_or_forward = 'back'
-input_condition = 5
+back_or_forward = 'forward'
+input_condition = 2
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -33,14 +33,14 @@ if os.path.isfile(file_name_time):
 
 # start time
 start_year = 2020
-start_month = 7
-start_day = 4
-start_hour = 12
+start_month = 6
+start_day = 28
+start_hour = 18
 
 # end time
 end_year = 2020
-end_month = 6
-end_day = 20
+end_month = 7
+end_day = 6
 end_hour = 12
 
 start_time = datetime.datetime(start_year, start_month, start_day, start_hour)
@@ -61,14 +61,14 @@ nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
 # chla region
-chla_lon_min = 141.5
-chla_lon_max = 142.5
-chla_lat_min = 27.5
-chla_lat_max = 28.0
+chla_lon_min = 140.9
+chla_lon_max = 142.6
+chla_lat_min = 27.3
+chla_lat_max = 28.9
 
 chla_grid_interval = 0.05
 chla_vmin_input = 0.15
-nan_input = False
+nan_input = True
 all_input = False
 
 chla_lon = np.arange(chla_lon_min, chla_lon_max+1E-6, chla_grid_interval)
@@ -81,7 +81,7 @@ with open(file_name_time, 'w') as f:
     f.write(f'{start_year},{start_month},{start_day},{start_hour}\n')
     f.write(f'{end_year},{end_month},{end_day},{end_hour}\n')
     f.write(f'{chla_lon_min},{chla_lon_max},{chla_lat_min},{chla_lat_max}\n')
-    f.write(f'{chla_grid_interval},{chla_vmin_input},{nan_input}\n')
+    f.write(f'{chla_grid_interval},{chla_vmin_input},{nan_input},{all_input}\n')
 
 #JAXAひまわりモニタからchlaのデータをダウンロード
 #https://www.eorc.jaxa.jp/ptree/userguide_j.html
@@ -248,6 +248,30 @@ def median_filter_chla(data, filter_size):
     data = data.where(data != 0, np.nan)
     return data
 
+#chlaのデータを双線形補間で取得する関数
+def chla_bilinear_interporation(chla_data, latitude, longitude):
+    lat_data = chla_data.coords['latitude'].values
+    lon_data = chla_data.coords['longitude'].values
+    
+    #latitude, longitudeの座標を囲む4点の座標を取得
+    lon_1 = lon_data[np.where(lon_data < longitude)][-1]
+    lon_2 = lon_data[np.where(lon_data > longitude)][0]
+    lat_1 = lat_data[np.where(lat_data < latitude)][0]
+    lat_2 = lat_data[np.where(lat_data > latitude)][-1]
+
+    #4点の座標を取得
+    chla_11 = chla_data.sel(latitude=lat_1, longitude=lon_1).values
+    chla_12 = chla_data.sel(latitude=lat_1, longitude=lon_2).values
+    chla_21 = chla_data.sel(latitude=lat_2, longitude=lon_1).values
+    chla_22 = chla_data.sel(latitude=lat_2, longitude=lon_2).values
+
+    #双線形補間
+    if chla_11 != chla_11 or chla_12 != chla_12 or chla_21 != chla_21 or chla_22 != chla_22:
+        return np.nan
+    else:
+        chla_interpolation = (chla_11 * (lon_2 - longitude) * (lat_2 - latitude) + chla_21 * (longitude - lon_1) * (lat_2 - latitude) + chla_12 * (lon_2 - longitude) * (latitude - lat_1) + chla_22 * (longitude - lon_1) * (latitude - lat_1)) / ((lon_2 - lon_1) * (lat_2 - lat_1))
+        return chla_interpolation
+
 
 #chlaのデータを取得
 time_start_UTC_year, time_start_UTC_month, time_start_UTC_day, time_start_UTC_hour = JST_to_UTC(start_year, start_month, start_day, start_hour)
@@ -260,38 +284,39 @@ def main(lon_main, lat_main):
     lat = round(lat_main, 2)
 
     if all_input == True:
-        return lon, lat
+        return lon, lat, chla_bilinear_interporation(data_chla, lat, lon)
     
     else:
 
         #lon, latに対応するchlaの値を取得
-        chla = data_chla.sel(longitude=lon, latitude=lat, method='nearest').values
+        chla = chla_bilinear_interporation(data_chla, lat, lon)
         print(lon, lat, chla)
 
         if nan_input == False:
             if chla > chla_vmin_input:
-                return lon, lat
+                return lon, lat, chla
             else:
-                return None, None
+                return None, None, None
         else:
             if chla != chla:
-                return lon, lat
+                return lon, lat, chla
             else:
-                return None, None
+                return None, None, None
 
 #point fileに書き込む
 with open(file_name_point, 'w') as f:
     for lon in chla_lon:
         for lat in chla_lat:
             if chla_vmin_input == chla_vmin_input:
-                lon_point, lat_point = main(lon, lat)
+                lon_point, lat_point, chla = main(lon, lat)
             else:
                 if nan_input == False:
                     lon_point, lat_point = round(lon, 2), round(lat, 2)
+                    chla = chla_bilinear_interporation(data_chla, lat_point, lon_point)
                 else:
-                    lon_point, lat_point = main(lon, lat)
+                    lon_point, lat_point, chla = main(lon, lat)
 
             if lon_point is not None:
-                f.write(f'{lon_point},{lat_point}\n')
+                f.write(f'{lon_point},{lat_point},{chla}\n')
 
 print('finish')
