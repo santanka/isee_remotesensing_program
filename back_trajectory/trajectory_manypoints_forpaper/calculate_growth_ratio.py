@@ -6,14 +6,17 @@ import datetime
 import pyproj
 import geopandas as gpd
 import matplotlib.cm as cm
+from scipy.stats import linregress
 
 
 # directory
 back_or_forward = 'forward'
 input_condition = 2
 
+cutoff_date = datetime.datetime(2020, 7, 4, 18)
+
 # Initial distance from Nishinoshima
-vmin = 60
+vmin = 70
 vmax = 150
 
 # Nishinoshima location
@@ -93,47 +96,68 @@ for i in range(len(datetime_list)):
         data_array[j, i, 3] = chla[j]
         data_array[j, i, 4] = initial_distance
 
+def calculate_growth_ratio(datetime_list_def, data_array_def):
+    #datetime_list_defとdata_array_defの長さは同じ
+    valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) < cutoff_date)
+    valid_dates = np.array([dt for i, dt in enumerate(datetime_list_def) if valid_indices[i]])
+    valid_data = data_array_def[valid_indices]
+
+    # 最初の日付を基準とした経過時間を計算
+    base_date = valid_dates[0]
+    elapsed_time_seconds = np.array([(dt - base_date).total_seconds() for dt in valid_dates])
+
+    # 6時間ごとの成長率を求めるため、時間を6時間単位に変換
+    elapsed_time_hours = elapsed_time_seconds / 3600  # 秒から時間に変換
+    elapsed_time_6hour_units = elapsed_time_hours / 6  # 6時間単位に変換
+
+    # 線形回帰を実行
+    slope, intercept, r_value, p_value, std_err = linregress(elapsed_time_6hour_units, valid_data)
+
+    return slope, intercept, r_value, p_value, std_err
+
+
+linregress_array = np.zeros((trajectory_number, 7))
+
+
+for count_i in range(trajectory_number):
+    slope, intercept, r_value, p_value, std_err = calculate_growth_ratio(datetime_list, data_array[count_i, :, 3])
+    linregress_array[count_i, 0] = count_i
+    linregress_array[count_i, 1] = data_array[count_i, 0, 4]
+    linregress_array[count_i, 2] = slope
+    linregress_array[count_i, 3] = intercept
+    linregress_array[count_i, 4] = r_value**2E0
+    linregress_array[count_i, 5] = p_value
+    linregress_array[count_i, 6] = std_err
+
+
+# plot setting
+mpl.rcParams['text.usetex'] = True
+mpl.rcParams['font.family'] = 'serif'
+mpl.rcParams['font.serif'] = ['Computer Modern Roman']
+mpl.rcParams['mathtext.fontset'] = 'cm'
+font_size = 30
+plt.rcParams["font.size"] = font_size
 
 # plot
 fig = plt.figure(figsize=(20, 10))
 gs = fig.add_gridspec(1, 2, width_ratios=[1, 0.05])
 
 ax_cbar = fig.add_subplot(gs[1])
-distance_min = np.min(data_array[:, :, 4])
-distance_max = np.max(data_array[:, :, 4])
-cbar_min = np.nanmax([vmin, distance_min])
-cbar_max = np.nanmin([vmax, distance_max])
-cmap = cm.turbo
-norm = mpl.colors.Normalize(vmin=cbar_min, vmax=cbar_max)
-sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-sm.set_array([])
-cbar = fig.colorbar(sm, cax=ax_cbar, orientation='vertical')
-cbar.set_label(r'Initial Distance from Nishinoshima [km]')
+vmin = 0
+vmax = 1
+cbar = mpl.colorbar.ColorbarBase(ax_cbar, cmap=cm.turbo, orientation='vertical', norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax))
+cbar.set_label(r'R$^2$')
 
 ax = fig.add_subplot(gs[0])
 
-for i in range(len(datetime_list)):
-    print(f'{datetime_list[i]}: {data_array[0, i, 3]}')
-formatted_date = [date.strftime('%m-%d %H') for date in datetime_list]
-print(formatted_date)
+ax.errorbar(linregress_array[:, 1], linregress_array[:, 2], yerr=linregress_array[:, 6], fmt='o', 
+            ecolor='gray', elinewidth=1, capsize=3, capthick=1, color='none')
 
-for i in range(trajectory_number):
-    if data_array[i, 0, 4] >= cbar_min and data_array[i, 0, 4] <= cbar_max:
-        print(data_array[i, 0, 0:5])
-        ax.plot(formatted_date, data_array[i, :, 3], label=f'Trajectory {i+1}', linewidth=2, alpha=0.5, c=cmap(norm(data_array[i, 0, 4])))
-    #else:
-    #    ax.plot(formatted_date, data_array[i, :, 3], label=f'Trajectory {i+1}', linewidth=2, alpha=0.1, c='gray')
+sc = ax.scatter(linregress_array[:, 1], linregress_array[:, 2], c=linregress_array[:, 4], cmap=cm.turbo, vmin=vmin, vmax=vmax)
 
-ax.set_xlabel(r'Time (JST)')
-rotation = 90
-ax.set_xticklabels(formatted_date, rotation=rotation)
-ax.set_ylabel(r'Chlorophyll-a [$\mathrm{mg/m^3}$]')
-
-#ax.minorticks_on()
+ax.minorticks_on()
 ax.grid(which='both', alpha=0.3)
-#ax.set_ylim(0, 0.5)
-#ax.set_yscale('log')
 
-fig.tight_layout()
+ax.set_xlabel(r'Initial distance from Nishinoshima [km]')
+ax.set_ylabel(r'Growth rate of Chl-a concentration [mg/m$^3$/6 hour]')
 plt.show()
-

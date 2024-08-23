@@ -26,7 +26,12 @@ from concurrent.futures import ThreadPoolExecutor
 # directory
 back_or_forward = 'forward'
 input_condition = 2
-trajectory_plot = False
+trajectory_plot = True
+
+threshold_initial_distance = True
+if threshold_initial_distance == True:
+    vmin_threshold_initial_distance = 60
+    vmax_threshold_initial_distance = 150
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -65,15 +70,15 @@ while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= e
     elif back_or_forward == 'forward':
         now_time = now_time + datetime.timedelta(hours=6)
 
-input_datetime = datetime.datetime(start_year_JST, start_month_JST, start_day_JST, 0) + datetime.timedelta(days=8)
-input_datetime = datetime.datetime(2020, 7, 4, 0) + datetime.timedelta(days=2)
-input_datetime_list = [
-   input_datetime,
-   input_datetime + datetime.timedelta(hours=6),
-   input_datetime + datetime.timedelta(hours=12),
-   #input_datetime + datetime.timedelta(hours=18),
-   #input_datetime + datetime.timedelta(days=1)
-    ]
+#input_datetime = datetime.datetime(start_year_JST, start_month_JST, start_day_JST, 0) + datetime.timedelta(days=8)
+#input_datetime = datetime.datetime(2020, 7, 4, 0) + datetime.timedelta(days=2)
+#input_datetime_list = [
+#   input_datetime,
+#   input_datetime + datetime.timedelta(hours=6),
+#   input_datetime + datetime.timedelta(hours=12),
+#   #input_datetime + datetime.timedelta(hours=18),
+#   #input_datetime + datetime.timedelta(days=1)
+#    ]
 #input_datetime_list = [
 #    input_datetime,
 #    input_datetime - datetime.timedelta(hours=6),
@@ -81,13 +86,13 @@ input_datetime_list = [
 #    #input_datetime - datetime.timedelta(hours=18)
 #    ]
 
-#input_datetime_list = [
+input_datetime_list = [
 #    datetime.datetime(2020, 6, 20, 12),
-#    datetime.datetime(2020, 6, 28, 18),
-#    datetime.datetime(2020, 7, 1, 12),
-#    datetime.datetime(2020, 7, 4, 12), 
-#    #datetime.datetime(2020, 6, 16, 6),
-#    ]
+    datetime.datetime(2020, 6, 28, 18),
+    datetime.datetime(2020, 7, 1, 12),
+    datetime.datetime(2020, 7, 4, 12), 
+    #datetime.datetime(2020, 6, 16, 6),
+    ]
 
 
 
@@ -310,7 +315,7 @@ def download_netcdf(year, month, day, hour):
     
     if data is None:
         return np.zeros((line_number_chla, pixel_number_chla))
-    os.remove(local_path)
+    #os.remove(local_path)
     return data
 
 def calculate_7hours_average(year, month, day, hour):
@@ -359,8 +364,8 @@ def median_filter_chla(data, filter_size):
     #data = data.where(data != 0, np.nan)
     data = data.rolling(longitude=filter_size, latitude=filter_size, center=True).median()
 
-    data = xr.where((data < chla_vmin) & (data != 0), chla_vmin, data)
-    data = xr.where(data > chla_vmax, chla_vmax, data)
+    #data = xr.where((data < chla_vmin) & (data != 0), chla_vmin, data)
+    #data = xr.where(data > chla_vmax, chla_vmax, data)
     data = data.astype(float)
     data = data.where(data != 0, np.nan)
     return data
@@ -444,7 +449,7 @@ def bz2_download(url, fname, band):
         print(f"Error opening file: {e}")
         print(f"File path: {fname}")
         data = None
-    os.remove(local_path_fname)
+    #os.remove(local_path_fname)
     return data
 
 #AshRGBのデータ作成(inverse=1で反転、0で反転しない)
@@ -595,11 +600,15 @@ if back_or_forward == 'forward' and trajectory_plot == True:
     cbar.set_label(r'Chlorophyll-a concentration [$\mathrm{mg / m^{3}}$]', fontsize=font_size*1.2)
 
     # colorbar for distance
-    cbar_vmin_distance = min_distance
-    cbar_vmax_distance = max_distance
-    cmap_color_distance = cm.autumn
+    if threshold_initial_distance == True:
+        cbar_vmin_distance = np.nanmax([min_distance, vmin_threshold_initial_distance])
+        cbar_vmax_distance = np.nanmin([max_distance, vmax_threshold_initial_distance])
+    else:
+        cbar_vmin_distance = min_distance
+        cbar_vmax_distance = max_distance
+    cmap_color_distance = cm.turbo
     # cm.springを反転
-    cmap_color_distance = cmap_color_distance.reversed()
+    #cmap_color_distance = cmap_color_distance.reversed()
     norm_distance = mpl.colors.Normalize(vmin=cbar_vmin_distance, vmax=cbar_vmax_distance)
     sm_distance = plt.cm.ScalarMappable(cmap=cmap_color_distance, norm=norm_distance)
     sm_distance.set_array([])
@@ -707,8 +716,12 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
 
     # plot trajectory # colorをcbar_distanceに合わせる
     #ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    if back_or_forward == 'forward' and trajectory_plot == True:
+    if back_or_forward == 'forward' and trajectory_plot == True and threshold_initial_distance == False:
         ax.scatter(longitude, latitude, c=distance_list, cmap=cmap_color_distance, edgecolors='k', s=markersize, label='Trajectory', zorder=10)
+    elif back_or_forward == 'forward' and trajectory_plot == True and threshold_initial_distance == True:
+        for count_i in range(len(distance_list)):
+            if distance_list[count_i] >= vmin_threshold_initial_distance and distance_list[count_i] <= vmax_threshold_initial_distance:
+                ax.scatter(longitude[count_i], latitude[count_i], c=cmap_color_distance(norm_distance(distance_list[count_i])), edgecolors='k', s=markersize, label='Trajectory', zorder=10)
     elif back_or_forward == 'back' and trajectory_plot == True:
         ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
 
