@@ -7,25 +7,37 @@ import pyproj
 import geopandas as gpd
 import matplotlib.cm as cm
 from scipy.stats import linregress
+from scipy.optimize import curve_fit
 
 
 # directory
 back_or_forward = 'forward'
 input_condition = 2
 
-cutoff_date = datetime.datetime(2020, 7, 4, 18)
+growth_ratio_selection = 'linear'
+#(power要調整)
 
-# Initial distance from Nishinoshima
-vmin = 70
+cutoff_date = datetime.datetime(2020, 7, 4, 18)
+#cutoff_date = datetime.datetime(2020, 7, 1, 0)
+
+# Initial distance from Nishinoshima/Mukojima
+vmin = 0
 vmax = 150
 
 # Nishinoshima location
 nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
+# Mukojima location
+mukojima_lon = 142.14
+mukojima_lat = 27.68
+
 def calculate_distance(latitude, longitude):
     geod = pyproj.Geod(ellps='WGS84')
-    azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    if back_or_forward == 'forward':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    elif back_or_forward == 'back':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, mukojima_lon, mukojima_lat)
     return distance / 1000
 
 def file_name_input(back_or_forward, input_condition):
@@ -96,9 +108,12 @@ for i in range(len(datetime_list)):
         data_array[j, i, 3] = chla[j]
         data_array[j, i, 4] = initial_distance
 
-def calculate_growth_ratio(datetime_list_def, data_array_def):
+def calculate_growth_ratio_linear(datetime_list_def, data_array_def):
     #datetime_list_defとdata_array_defの長さは同じ
-    valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) < cutoff_date)
+    if back_or_forward == 'forward':
+        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) < cutoff_date)
+    elif back_or_forward == 'back':
+        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) > cutoff_date)
     valid_dates = np.array([dt for i, dt in enumerate(datetime_list_def) if valid_indices[i]])
     valid_data = data_array_def[valid_indices]
 
@@ -110,17 +125,69 @@ def calculate_growth_ratio(datetime_list_def, data_array_def):
     elapsed_time_hours = elapsed_time_seconds / 3600  # 秒から時間に変換
     elapsed_time_6hour_units = elapsed_time_hours / 6  # 6時間単位に変換
 
+    print(valid_dates)
+
     # 線形回帰を実行
     slope, intercept, r_value, p_value, std_err = linregress(elapsed_time_6hour_units, valid_data)
 
     return slope, intercept, r_value, p_value, std_err
 
+def power_law(x, a, b):
+    # xが0や負の値を持たないように、最低値を制限
+    x = np.where(x > 0, x, 1e-10)  # 負の値やゼロを避ける
+    return a * x ** b
+
+def calculate_growth_ratio_power(datetime_list_def, data_array_def):
+    # datetime_list_defとdata_array_defの長さは同じであることを前提
+    if back_or_forward == 'forward':
+        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) < cutoff_date)
+    elif back_or_forward == 'back':
+        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) > cutoff_date)
+
+    valid_dates = np.array([dt for i, dt in enumerate(datetime_list_def) if valid_indices[i]])
+    valid_data = data_array_def[valid_indices]
+
+    # 最初の日付を基準とした経過時間を計算
+    base_date = valid_dates[0]
+    elapsed_time_seconds = np.array([(dt - base_date).total_seconds() for dt in valid_dates])
+
+    # 6時間ごとの成長率を求めるため、時間を6時間単位に変換
+    elapsed_time_hours = elapsed_time_seconds / 3600  # 秒から時間に変換
+    elapsed_time_6hour_units = elapsed_time_hours / 6  # 6時間単位に変換
+
+    print(valid_dates)
+
+    # べき乗フィッティングを実行
+    try:
+        popt, pcov = curve_fit(power_law, elapsed_time_6hour_units, valid_data, maxfev=10000)
+        a, b = popt
+
+        # 予測値を計算して決定係数を求める
+        predicted_data = power_law(elapsed_time_6hour_units, *popt)
+        residuals = valid_data - predicted_data
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((valid_data - np.mean(valid_data))**2)
+        r_value = np.sqrt(1 - (ss_res / ss_tot))
+
+        # 標準誤差の計算（1つの値を取るための調整）
+        std_err = np.sqrt(np.diag(pcov))
+        std_err = std_err[0] if std_err.size > 0 else np.nan  # std_errが配列なら最初の要素を使用
+    except RuntimeError as e:
+        print(f"Fit did not converge: {e}")
+        a, b = np.nan, np.nan
+        r_value, p_value, std_err = np.nan, np.nan, np.nan
+
+    # 線形フィッティングの出力形式に合わせて返す
+    return b, a, r_value, np.nan, std_err
 
 linregress_array = np.zeros((trajectory_number, 7))
 
 
 for count_i in range(trajectory_number):
-    slope, intercept, r_value, p_value, std_err = calculate_growth_ratio(datetime_list, data_array[count_i, :, 3])
+    if growth_ratio_selection == 'linear':
+        slope, intercept, r_value, p_value, std_err = calculate_growth_ratio_linear(datetime_list, data_array[count_i, :, 3])
+    elif growth_ratio_selection == 'power':
+        slope, intercept, r_value, p_value, std_err = calculate_growth_ratio_power(datetime_list, data_array[count_i, :, 3])
     linregress_array[count_i, 0] = count_i
     linregress_array[count_i, 1] = data_array[count_i, 0, 4]
     linregress_array[count_i, 2] = slope
@@ -158,6 +225,12 @@ sc = ax.scatter(linregress_array[:, 1], linregress_array[:, 2], c=linregress_arr
 ax.minorticks_on()
 ax.grid(which='both', alpha=0.3)
 
-ax.set_xlabel(r'Initial distance from Nishinoshima [km]')
-ax.set_ylabel(r'Growth rate of Chl-a concentration [mg/m$^3$/6 hour]')
+if back_or_forward == 'forward':
+    ax.set_xlabel(r'Initial distance from Nishinoshima [km]')
+elif back_or_forward == 'back':
+    ax.set_xlabel(r'Initial distance from Mukojima [km]')
+if growth_ratio_selection == 'linear':
+    ax.set_ylabel(r'Growth rate of Chl-a concentration (linear) [mg/m$^3$/6 hour]')
+elif growth_ratio_selection == 'power':
+    ax.set_ylabel(r'Growth rate of Chl-a concentration (power) [mg/m$^3$/6 hour]')
 plt.show()

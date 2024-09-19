@@ -9,20 +9,28 @@ import matplotlib.cm as cm
 
 
 # directory
-back_or_forward = 'forward'
-input_condition = 2
+back_or_forward = 'back'
+input_condition = 5
 
-# Initial distance from Nishinoshima
-vmin = 60
+# Initial distance from Nishinoshima/Mukojima
+vmin = 0
 vmax = 150
 
 # Nishinoshima location
 nishinoshima_lon = 140.879722
 nishinoshima_lat = 27.243889
 
+# Mukojima location
+mukojima_lon = 142.14
+mukojima_lat = 27.68
+
+
 def calculate_distance(latitude, longitude):
     geod = pyproj.Geod(ellps='WGS84')
-    azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    if back_or_forward == 'forward':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    elif back_or_forward == 'back':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, mukojima_lon, mukojima_lat)
     return distance / 1000
 
 def file_name_input(back_or_forward, input_condition):
@@ -92,6 +100,8 @@ for i in range(len(datetime_list)):
         data_array[j, i, 2] = longitude[j]
         data_array[j, i, 3] = chla[j]
         data_array[j, i, 4] = initial_distance
+        if i == 0:
+            print(latitude[j], longitude[j], chla[j], initial_distance)
 
 
 # plot
@@ -108,7 +118,10 @@ norm = mpl.colors.Normalize(vmin=cbar_min, vmax=cbar_max)
 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
 cbar = fig.colorbar(sm, cax=ax_cbar, orientation='vertical')
-cbar.set_label(r'Initial Distance from Nishinoshima [km]')
+if back_or_forward == 'forward':
+    cbar.set_label(r'Initial Distance from Nishinoshima [km]')
+elif back_or_forward == 'back':
+    cbar.set_label(r'Initial Distance from Mukojima [km]')
 
 ax = fig.add_subplot(gs[0])
 
@@ -129,8 +142,15 @@ rotation = 90
 ax.set_xticklabels(formatted_date, rotation=rotation)
 ax.set_ylabel(r'Chlorophyll-a [$\mathrm{mg/m^3}$]')
 
-#ax.minorticks_on()
-ax.grid(which='both', alpha=0.3)
+#y軸の目盛りを0.1刻みに
+ylim_max = np.nanmax(data_array[:, :, 3])
+ylim_max_round = np.ceil(ylim_max * 10) / 10
+ax.set_ylim(0, ylim_max_round)
+ax.set_yticks(np.arange(0, ylim_max_round, 0.1))
+#yだけminor ticksを表示、xはmajor ticksのみ
+ax.yaxis.minorticks_on()
+ax.grid(axis='x', which='major', alpha=0.3)
+ax.grid(axis='y', which='both', alpha=0.3)
 #ax.set_ylim(0, 0.5)
 #ax.set_yscale('log')
 

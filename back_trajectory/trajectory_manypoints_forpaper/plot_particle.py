@@ -24,13 +24,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # directory
-back_or_forward = 'forward'
-input_condition = 2
+back_or_forward = 'back'
+input_condition = 5
 trajectory_plot = True
 
 threshold_initial_distance = True
 if threshold_initial_distance == True:
-    vmin_threshold_initial_distance = 60
+    vmin_threshold_initial_distance = 0
     vmax_threshold_initial_distance = 150
 
 def file_name_input(back_or_forward, input_condition):
@@ -87,10 +87,10 @@ while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= e
 #    ]
 
 input_datetime_list = [
-#    datetime.datetime(2020, 6, 20, 12),
-    datetime.datetime(2020, 6, 28, 18),
-    datetime.datetime(2020, 7, 1, 12),
     datetime.datetime(2020, 7, 4, 12), 
+    datetime.datetime(2020, 7, 1, 12),
+    datetime.datetime(2020, 6, 28, 18),
+    datetime.datetime(2020, 6, 20, 12),
     #datetime.datetime(2020, 6, 16, 6),
     ]
 
@@ -180,7 +180,10 @@ ratio_lat_lon = latitude_width / longitude_width
 # initial_latitude, initial_longitudeから、各点のnishinoshimaまでの距離(km)を計算
 def calculate_distance(latitude, longitude):
     geod = pyproj.Geod(ellps='WGS84')
-    azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    if back_or_forward == 'forward':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, nishinoshima_lon, nishinoshima_lat)
+    elif back_or_forward == 'back':
+        azimuth1, azimuth2, distance = geod.inv(longitude, latitude, mukojima_lon, mukojima_lat)
     return distance / 1000
 
 distance_list = np.array([])
@@ -615,7 +618,47 @@ if back_or_forward == 'forward' and trajectory_plot == True:
     cbar_distance = plt.colorbar(sm_distance, cax=ax_cbar_2, orientation='horizontal')
     cbar_distance.set_label(r'Initial Distance from Nishinoshima [km]', fontsize=font_size*1.2)
 
-elif back_or_forward == 'back' or trajectory_plot == False:
+elif back_or_forward == 'back' and trajectory_plot == True:
+    fig = plt.figure(figsize=(10, (input_datetime_num+0.2)*5*ratio_lat_lon))
+    markersize = 15
+
+    #using gridspec
+    gs = fig.add_gridspec(input_datetime_num+2, 2, height_ratios=[ratio_lat_lon]*input_datetime_num+[ratio_lat_lon/10]+[ratio_lat_lon/10], width_ratios=[1, 1])
+    # last row is colorbar
+    ax_cbar = fig.add_subplot(gs[-2, :])
+    ax_cbar_2 = fig.add_subplot(gs[-1, :])
+    axes = []
+    for i in range(input_datetime_num):
+        axes.append(fig.add_subplot(gs[i, 0]))
+        axes.append(fig.add_subplot(gs[i, 1]))
+
+    # colorbar
+    cbar_vmin = 1E-1
+    cbar_vmax = 1E0
+    cmap_color = cm.cool
+    norm = LogNorm(vmin=cbar_vmin, vmax=cbar_vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap_color, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, cax=ax_cbar, orientation='horizontal')
+    cbar.set_label(r'Chlorophyll-a concentration [$\mathrm{mg / m^{3}}$]', fontsize=font_size*1.2)
+
+    # colorbar for distance
+    if threshold_initial_distance == True:
+        cbar_vmin_distance = np.nanmax([min_distance, vmin_threshold_initial_distance])
+        cbar_vmax_distance = np.nanmin([max_distance, vmax_threshold_initial_distance])
+    else:
+        cbar_vmin_distance = min_distance
+        cbar_vmax_distance = max_distance
+    cmap_color_distance = cm.turbo
+    # cm.springを反転
+    #cmap_color_distance = cmap_color_distance.reversed()
+    norm_distance = mpl.colors.Normalize(vmin=cbar_vmin_distance, vmax=cbar_vmax_distance)
+    sm_distance = plt.cm.ScalarMappable(cmap=cmap_color_distance, norm=norm_distance)
+    sm_distance.set_array([])
+    cbar_distance = plt.colorbar(sm_distance, cax=ax_cbar_2, orientation='horizontal')
+    cbar_distance.set_label(r'Initial Distance from Mukojima [km]', fontsize=font_size*1.2)
+
+elif trajectory_plot == False:
     fig = plt.figure(figsize=(10, (input_datetime_num+0.1)*5*ratio_lat_lon))
     markersize = 15
 
@@ -722,8 +765,12 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
         for count_i in range(len(distance_list)):
             if distance_list[count_i] >= vmin_threshold_initial_distance and distance_list[count_i] <= vmax_threshold_initial_distance:
                 ax.scatter(longitude[count_i], latitude[count_i], c=cmap_color_distance(norm_distance(distance_list[count_i])), edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    elif back_or_forward == 'back' and trajectory_plot == True:
+    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == False:
         ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
+    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == True:
+        for count_i in range(len(distance_list)):
+            if distance_list[count_i] >= vmin_threshold_initial_distance and distance_list[count_i] <= vmax_threshold_initial_distance:
+                ax.scatter(longitude[count_i], latitude[count_i], c=cmap_color_distance(norm_distance(distance_list[count_i])), edgecolors='k', s=markersize, label='Trajectory', zorder=10)
 
 
     # shapefile
