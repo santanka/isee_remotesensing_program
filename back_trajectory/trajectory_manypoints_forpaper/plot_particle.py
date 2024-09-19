@@ -24,14 +24,24 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # directory
-back_or_forward = 'back'
-input_condition = 5
+back_or_forward = 'forward'
+input_condition = 2
 trajectory_plot = True
 
 threshold_initial_distance = True
 if threshold_initial_distance == True:
     vmin_threshold_initial_distance = 0
-    vmax_threshold_initial_distance = 150
+    vmax_threshold_initial_distance = 300
+
+threshold_angle = False
+threshold_angle_date_JST = datetime.datetime(2020, 6, 28, 18)
+if threshold_angle == True and threshold_initial_distance == True:
+    print('Error!: threshold_angle and threshold_initial_distance cannot be True at the same time.')
+    quit()
+if threshold_angle == True and back_or_forward == 'forward':
+    print('Error!: threshold_angle cannot be True in forward trajectory.')
+    quit()
+
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -87,10 +97,10 @@ while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= e
 #    ]
 
 input_datetime_list = [
-    datetime.datetime(2020, 7, 4, 12), 
-    datetime.datetime(2020, 7, 1, 12),
     datetime.datetime(2020, 6, 28, 18),
-    datetime.datetime(2020, 6, 20, 12),
+    datetime.datetime(2020, 7, 1, 12),
+    datetime.datetime(2020, 7, 4, 12), 
+    #datetime.datetime(2020, 6, 20, 12),
     #datetime.datetime(2020, 6, 16, 6),
     ]
 
@@ -104,12 +114,12 @@ for time_check in input_datetime_list:
         quit()
 
 # read initial point file
-def read_point_file():
-    point = np.loadtxt(file_name_point, delimiter=',')
+def read_point_file(file_name):
+    point = np.loadtxt(file_name, delimiter=',')
     latitude = point[:, 1]
     longitude = point[:, 0]
     return latitude, longitude
-initial_latitude, initial_longitude = read_point_file()
+initial_latitude, initial_longitude = read_point_file(file_name_point)
 
 
 # trajectory file
@@ -177,7 +187,7 @@ latitude_width = plot_latitude_max - plot_latitude_min
 longitude_width = plot_longitude_max - plot_longitude_min
 ratio_lat_lon = latitude_width / longitude_width
 
-# initial_latitude, initial_longitudeから、各点のnishinoshimaまでの距離(km)を計算
+# latitude, longitudeから、各点のnishinoshimaまでの距離(km)を計算
 def calculate_distance(latitude, longitude):
     geod = pyproj.Geod(ellps='WGS84')
     if back_or_forward == 'forward':
@@ -195,6 +205,22 @@ max_distance = np.max(distance_list)
 min_distance = np.min(distance_list)
 
 print(max_distance, min_distance)
+
+# initial_latitude, initial_longitudeから、nishinoshimaから各点までの角度を計算
+def calculate_angle(latitude, longitude):
+    geod = pyproj.Geod(ellps='WGS84')
+    azimuth1, azimuth2, distance = geod.inv(nishinoshima_lon, nishinoshima_lat, longitude, latitude)
+    return azimuth1
+
+file_name_angle = os.path.dirname(file_name_time) + f'/trajectory_chla_{threshold_angle_date_JST.year}_{threshold_angle_date_JST.month}_{threshold_angle_date_JST.day}_{threshold_angle_date_JST.hour}.csv'
+trajectory_angle = np.loadtxt(file_name_angle, delimiter=',')
+latitude_trajectory_angle = trajectory_angle[:, 2]
+longitude_trajectory_angle = trajectory_angle[:, 1]
+
+angle_list = np.array([])
+for count_i in range(len(latitude_trajectory_angle)):
+    angle = calculate_angle(latitude_trajectory_angle[count_i], longitude_trajectory_angle[count_i])
+    angle_list = np.append(angle_list, angle)
 
 # output
 #download data
@@ -568,8 +594,6 @@ def calculate_7hours_average_ash(year, month, day, hour):
     return data_RGB
 
 
-#backwardでは距離のcolorbarを与えない
-
 # plot setting
 mpl.rcParams['text.usetex'] = True
 mpl.rcParams['font.family'] = 'serif'
@@ -618,7 +642,7 @@ if back_or_forward == 'forward' and trajectory_plot == True:
     cbar_distance = plt.colorbar(sm_distance, cax=ax_cbar_2, orientation='horizontal')
     cbar_distance.set_label(r'Initial Distance from Nishinoshima [km]', fontsize=font_size*1.2)
 
-elif back_or_forward == 'back' and trajectory_plot == True:
+elif back_or_forward == 'back' and trajectory_plot == True and threshold_angle == False:
     fig = plt.figure(figsize=(10, (input_datetime_num+0.2)*5*ratio_lat_lon))
     markersize = 15
 
@@ -657,6 +681,41 @@ elif back_or_forward == 'back' and trajectory_plot == True:
     sm_distance.set_array([])
     cbar_distance = plt.colorbar(sm_distance, cax=ax_cbar_2, orientation='horizontal')
     cbar_distance.set_label(r'Initial Distance from Mukojima [km]', fontsize=font_size*1.2)
+
+elif back_or_forward == 'back' and trajectory_plot == True and threshold_angle == True:
+    fig = plt.figure(figsize=(10, (input_datetime_num+0.2)*5*ratio_lat_lon))
+    markersize = 15
+
+    #using gridspec
+    gs = fig.add_gridspec(input_datetime_num+2, 2, height_ratios=[ratio_lat_lon]*input_datetime_num+[ratio_lat_lon/10]+[ratio_lat_lon/10], width_ratios=[1, 1])
+    # last row is colorbar
+    ax_cbar = fig.add_subplot(gs[-2, :])
+    ax_cbar_2 = fig.add_subplot(gs[-1, :])
+    axes = []
+    for i in range(input_datetime_num):
+        axes.append(fig.add_subplot(gs[i, 0]))
+        axes.append(fig.add_subplot(gs[i, 1]))
+
+    # colorbar
+    cbar_vmin = 1E-1
+    cbar_vmax = 1E0
+    cmap_color = cm.cool
+    norm = LogNorm(vmin=cbar_vmin, vmax=cbar_vmax)
+    sm = plt.cm.ScalarMappable(cmap=cmap_color, norm=norm)
+    sm.set_array([])
+    cbar = plt.colorbar(sm, cax=ax_cbar, orientation='horizontal')
+    cbar.set_label(r'Chlorophyll-a concentration [$\mathrm{mg / m^{3}}$]', fontsize=font_size*1.2)
+
+    # colorbar for angle
+    cbar_vmin_angle = np.nanmin(angle_list)
+    cbar_vmax_angle = np.nanmax(angle_list)
+    cmap_color_angle = cm.turbo
+    norm_angle = mpl.colors.Normalize(vmin=cbar_vmin_angle, vmax=cbar_vmax_angle)
+    sm_angle = plt.cm.ScalarMappable(cmap=cmap_color_angle, norm=norm_angle)
+    sm_angle.set_array([])
+    cbar_angle = plt.colorbar(sm_angle, cax=ax_cbar_2, orientation='horizontal')
+    charactor_angle_date_JST = threshold_angle_date_JST.strftime('%Y-%m-%d %H:%M JST')
+    cbar_angle.set_label(f'Angle from Nishinoshima ({charactor_angle_date_JST}) [deg]', fontsize=font_size*1.2)
 
 elif trajectory_plot == False:
     fig = plt.figure(figsize=(10, (input_datetime_num+0.1)*5*ratio_lat_lon))
@@ -765,12 +824,14 @@ def plot_map(ax, now_time, count_i, chl_or_ash):
         for count_i in range(len(distance_list)):
             if distance_list[count_i] >= vmin_threshold_initial_distance and distance_list[count_i] <= vmax_threshold_initial_distance:
                 ax.scatter(longitude[count_i], latitude[count_i], c=cmap_color_distance(norm_distance(distance_list[count_i])), edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == False:
+    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == False and threshold_angle == False:
         ax.scatter(longitude, latitude, color='yellow', edgecolors='k', s=markersize, label='Trajectory', zorder=10)
-    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == True:
+    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == True and threshold_angle == False:
         for count_i in range(len(distance_list)):
             if distance_list[count_i] >= vmin_threshold_initial_distance and distance_list[count_i] <= vmax_threshold_initial_distance:
                 ax.scatter(longitude[count_i], latitude[count_i], c=cmap_color_distance(norm_distance(distance_list[count_i])), edgecolors='k', s=markersize, label='Trajectory', zorder=10)
+    elif back_or_forward == 'back' and trajectory_plot == True and threshold_initial_distance == False and threshold_angle == True:
+        ax.scatter(longitude, latitude, c=angle_list, cmap=cmap_color_angle, edgecolors='k', s=markersize, label='Trajectory', zorder=10)
 
 
     # shapefile

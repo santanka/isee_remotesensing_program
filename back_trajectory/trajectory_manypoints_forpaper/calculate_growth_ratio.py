@@ -15,14 +15,23 @@ back_or_forward = 'forward'
 input_condition = 2
 
 growth_ratio_selection = 'linear'
-#(power要調整)
 
-cutoff_date = datetime.datetime(2020, 7, 4, 18)
-#cutoff_date = datetime.datetime(2020, 7, 1, 0)
+if back_or_forward == 'forward':
+    cutoff_date = datetime.datetime(2020, 7, 4, 18)
+elif back_or_forward == 'back':
+    cutoff_date = datetime.datetime(2020, 7, 1, 0)
 
 # Initial distance from Nishinoshima/Mukojima
+distance_plot = True
 vmin = 0
-vmax = 150
+vmax = 300
+
+# Angle from Nishinoshima
+angle_plot = False
+angle_date_JST = datetime.datetime(2020, 6, 28, 18)
+
+if (distance_plot == False and angle_plot == False) or (distance_plot == True and angle_plot == True):
+    raise ValueError('Please set either distance_plot or angle_plot to True')
 
 # Nishinoshima location
 nishinoshima_lon = 140.879722
@@ -39,6 +48,11 @@ def calculate_distance(latitude, longitude):
     elif back_or_forward == 'back':
         azimuth1, azimuth2, distance = geod.inv(longitude, latitude, mukojima_lon, mukojima_lat)
     return distance / 1000
+
+def calculate_angle(latitude, longitude, latitude_base, longitude_base):
+    geod = pyproj.Geod(ellps='WGS84')
+    azimuth1, azimuth2, distance = geod.inv(longitude_base, latitude_base, longitude, latitude)
+    return azimuth1
 
 def file_name_input(back_or_forward, input_condition):
     dir_1 = f'/mnt/j/isee_remote_data/JST/'
@@ -95,7 +109,15 @@ while (now_time >= end_time_JST and back_or_forward == 'back') or (now_time <= e
 trajectory_initial_point = np.loadtxt(file_name_point, delimiter=',')
 trajectory_number = len(trajectory_initial_point)
 
-data_array = np.zeros((trajectory_number, len(datetime_list), 5))
+data_array = np.zeros((trajectory_number, len(datetime_list), 6))
+
+angle_base_data = np.zeros((trajectory_number, 4))
+angle_index_number, angle_latitude, angle_longitude, angle_chla = read_trajectory_file_for_width(angle_date_JST)
+angle_base_data[:, 0] = angle_index_number
+angle_base_data[:, 1] = angle_longitude
+angle_base_data[:, 2] = angle_latitude
+for i in range(trajectory_number):
+    angle_base_data[i, 3] = calculate_angle(angle_base_data[i, 2], angle_base_data[i, 1], nishinoshima_lat, nishinoshima_lon)
 
 for i in range(len(datetime_list)):
     now_time = datetime_list[i]
@@ -107,6 +129,9 @@ for i in range(len(datetime_list)):
         data_array[j, i, 2] = longitude[j]
         data_array[j, i, 3] = chla[j]
         data_array[j, i, 4] = initial_distance
+        data_array[j, i, 5] = angle_base_data[j, 3]
+        if i == 0:
+            print(latitude[j], longitude[j], chla[j], initial_distance, angle_base_data[j, 3])
 
 def calculate_growth_ratio_linear(datetime_list_def, data_array_def):
     #datetime_list_defとdata_array_defの長さは同じ
@@ -131,65 +156,17 @@ def calculate_growth_ratio_linear(datetime_list_def, data_array_def):
     slope, intercept, r_value, p_value, std_err = linregress(elapsed_time_6hour_units, valid_data)
 
     return slope, intercept, r_value, p_value, std_err
-
-def power_law(x, a, b):
-    # xが0や負の値を持たないように、最低値を制限
-    x = np.where(x > 0, x, 1e-10)  # 負の値やゼロを避ける
-    return a * x ** b
-
-def calculate_growth_ratio_power(datetime_list_def, data_array_def):
-    # datetime_list_defとdata_array_defの長さは同じであることを前提
-    if back_or_forward == 'forward':
-        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) < cutoff_date)
-    elif back_or_forward == 'back':
-        valid_indices = ~np.isnan(data_array_def) & (np.array(datetime_list_def) > cutoff_date)
-
-    valid_dates = np.array([dt for i, dt in enumerate(datetime_list_def) if valid_indices[i]])
-    valid_data = data_array_def[valid_indices]
-
-    # 最初の日付を基準とした経過時間を計算
-    base_date = valid_dates[0]
-    elapsed_time_seconds = np.array([(dt - base_date).total_seconds() for dt in valid_dates])
-
-    # 6時間ごとの成長率を求めるため、時間を6時間単位に変換
-    elapsed_time_hours = elapsed_time_seconds / 3600  # 秒から時間に変換
-    elapsed_time_6hour_units = elapsed_time_hours / 6  # 6時間単位に変換
-
-    print(valid_dates)
-
-    # べき乗フィッティングを実行
-    try:
-        popt, pcov = curve_fit(power_law, elapsed_time_6hour_units, valid_data, maxfev=10000)
-        a, b = popt
-
-        # 予測値を計算して決定係数を求める
-        predicted_data = power_law(elapsed_time_6hour_units, *popt)
-        residuals = valid_data - predicted_data
-        ss_res = np.sum(residuals**2)
-        ss_tot = np.sum((valid_data - np.mean(valid_data))**2)
-        r_value = np.sqrt(1 - (ss_res / ss_tot))
-
-        # 標準誤差の計算（1つの値を取るための調整）
-        std_err = np.sqrt(np.diag(pcov))
-        std_err = std_err[0] if std_err.size > 0 else np.nan  # std_errが配列なら最初の要素を使用
-    except RuntimeError as e:
-        print(f"Fit did not converge: {e}")
-        a, b = np.nan, np.nan
-        r_value, p_value, std_err = np.nan, np.nan, np.nan
-
-    # 線形フィッティングの出力形式に合わせて返す
-    return b, a, r_value, np.nan, std_err
-
 linregress_array = np.zeros((trajectory_number, 7))
 
 
 for count_i in range(trajectory_number):
     if growth_ratio_selection == 'linear':
         slope, intercept, r_value, p_value, std_err = calculate_growth_ratio_linear(datetime_list, data_array[count_i, :, 3])
-    elif growth_ratio_selection == 'power':
-        slope, intercept, r_value, p_value, std_err = calculate_growth_ratio_power(datetime_list, data_array[count_i, :, 3])
     linregress_array[count_i, 0] = count_i
-    linregress_array[count_i, 1] = data_array[count_i, 0, 4]
+    if distance_plot == True:
+        linregress_array[count_i, 1] = data_array[count_i, 0, 4]
+    elif angle_plot == True:
+        linregress_array[count_i, 1] = data_array[count_i, 0, 5]
     linregress_array[count_i, 2] = slope
     linregress_array[count_i, 3] = intercept
     linregress_array[count_i, 4] = r_value**2E0
@@ -217,20 +194,49 @@ cbar.set_label(r'R$^2$')
 
 ax = fig.add_subplot(gs[0])
 
-ax.errorbar(linregress_array[:, 1], linregress_array[:, 2], yerr=linregress_array[:, 6], fmt='o', 
-            ecolor='gray', elinewidth=1, capsize=3, capthick=1, color='none')
-
+ax.errorbar(linregress_array[:, 1], linregress_array[:, 2], yerr=linregress_array[:, 6], fmt='o', ecolor='gray', elinewidth=1, capsize=3, capthick=1, color='none')
 sc = ax.scatter(linregress_array[:, 1], linregress_array[:, 2], c=linregress_array[:, 4], cmap=cm.turbo, vmin=vmin, vmax=vmax)
 
 ax.minorticks_on()
 ax.grid(which='both', alpha=0.3)
 
-if back_or_forward == 'forward':
+if back_or_forward == 'forward' and distance_plot == True:
     ax.set_xlabel(r'Initial distance from Nishinoshima [km]')
-elif back_or_forward == 'back':
+elif back_or_forward == 'back' and distance_plot == True:
     ax.set_xlabel(r'Initial distance from Mukojima [km]')
+elif angle_plot == True:
+    charactor_angle_date_JST = angle_date_JST.strftime('%Y-%m-%d %H:%M JST')
+    ax.set_xlabel(f'Angle from Nishinoshima [deg]\n({charactor_angle_date_JST})')
 if growth_ratio_selection == 'linear':
-    ax.set_ylabel(r'Growth rate of Chl-a concentration (linear) [mg/m$^3$/6 hour]')
-elif growth_ratio_selection == 'power':
-    ax.set_ylabel(r'Growth rate of Chl-a concentration (power) [mg/m$^3$/6 hour]')
-plt.show()
+    ax.set_ylabel(f'Growth rate of Chl-a concentration\n(linear) ' + r'[mg/m$^3$/6 hour]')
+
+# 図の左上に(j)を表示
+ax.text(-0.1, 1.0, '(h)', transform=ax.transAxes, fontsize=font_size, verticalalignment='top')
+
+fig.tight_layout()
+
+def file_name():
+    dir_1 = f'/mnt/j/isee_remote_data/JST/'
+
+    if back_or_forward == 'back':
+        dir_2 = f'back_trajectory_manypoints_forpaper/back_trajectory_condition_{input_condition}/figure/'
+    elif back_or_forward == 'forward':
+        dir_2 = f'forward_trajectory_manypoints_forpaper/forward_trajectory_condition_{input_condition}/figure/'
+    
+    dir_3 = f'calculate_growth_ratio/'
+    
+    dir_name = dir_1 + dir_2 + dir_3
+    os.makedirs(dir_name, exist_ok=True)
+
+    if distance_plot == True and growth_ratio_selection == 'linear':
+        file_name = dir_name + f'linear_distance'
+    elif angle_plot == True and growth_ratio_selection == 'linear':
+        file_name = dir_name + f'linear_angle'
+    
+    return file_name
+
+file_name = file_name()
+fig.savefig(file_name + '.png')
+fig.savefig(file_name + '.pdf')
+
+plt.close()
